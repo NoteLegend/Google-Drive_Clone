@@ -1,7 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 const Sidebar = () => {
   const [activeItem, setActiveItem] = useState('my-drive');
+  const [isNewOpen, setIsNewOpen] = useState(false);
+  const newMenuRef = useRef(null);
+
+  useEffect(() => {
+    const onClickOutside = (e) => {
+      if (newMenuRef.current && !newMenuRef.current.contains(e.target)) {
+        setIsNewOpen(false);
+      }
+    };
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') setIsNewOpen(false);
+    };
+    document.addEventListener('mousedown', onClickOutside);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onClickOutside);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, []);
 
   const menuItems = [
     { id: 'my-drive', label: 'My Drive', icon: 'drive' },
@@ -62,23 +81,128 @@ const Sidebar = () => {
     <aside className="w-64 h-full bg-white border-r border-gray-200 flex flex-col">
       {/* New Button */}
       <div className="p-4">
-        <button className="flex items-center gap-3 px-5 py-2.5 bg-white rounded-2xl shadow-sm border border-gray-200 
-                     hover:shadow-md transition-all">
-          <svg
-            viewBox="0 0 24 24"
-            width="20"
-            height="30"
-            fill="none"
-            stroke="black"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="text-gray-800"
+        <div ref={newMenuRef} className="relative inline-block">
+          <button
+            onClick={() => setIsNewOpen((v) => !v)}
+            aria-haspopup="menu"
+            aria-expanded={isNewOpen}
+            className="flex items-center gap-3 px-5 py-2.5 bg-white rounded-2xl shadow-sm border border-gray-200 
+               hover:shadow-md transition-all relative z-40"
           >
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-          <span className="text-gray-800 text-sm font-medium">New</span>
-        </button>
+            <svg
+              viewBox="0 0 24 24"
+              width="20"
+              height="30"
+              fill="none"
+              stroke="black"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="text-gray-800"
+            >
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+            <span className="text-gray-800 text-sm font-medium">New</span>
+          </button>
+
+          <div
+            role="menu"
+            className={`absolute left-0 top-[-40px] z-50 w-72 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden
+      origin-top-left transform transition-all duration-200 ease-out
+      ${isNewOpen
+                ? 'opacity-100 translate-y-10 pointer-events-auto'
+                : 'opacity-0 -translate-y-2 pointer-events-none'}`}
+          >
+            <div className="py-1">
+              <button className="w-full flex items-center justify-between px-4 py-2.5 text-sm text-gray-800 hover:bg-gray-100">
+                <span className="flex items-center gap-3">
+                  <svg className="w-5 h-5 text-gray-700" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
+                  </svg>
+                  New folder
+                </span>
+                <span className="text-xs text-gray-500">Alt+C then F</span>
+              </button>
+
+              <div className="border-t border-gray-200"></div>
+
+              <button className="w-full flex items-center justify-between px-4 py-2.5 text-sm text-gray-800 hover:bg-gray-100">
+                <span className="flex items-center gap-3">
+                  <svg className="w-5 h-5 text-gray-700" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" />
+                  </svg>
+                  File upload
+                </span>
+                <span className="text-xs text-gray-500">Alt+C then U</span>
+              </button>
+
+              <button className="w-full flex items-center justify-between px-4 py-2.5 text-sm text-gray-800 hover:bg-gray-100">
+                <span className="flex items-center gap-3">
+                  <svg className="w-5 h-5 text-gray-700" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
+                  </svg>
+                  Folder upload
+                </span>
+                <span className="text-xs text-gray-500">Alt+C then I</span>
+              </button>
+
+              <div className="border-t border-gray-200 my-1"></div>
+
+              {["Google Docs", "Google Sheets", "Google Slides", "Google Vids", "Google Forms", "More"].map((label) => (
+                <button
+                  key={label}
+                  className="w-full flex items-center justify-between px-4 py-2.5 text-sm text-gray-800 hover:bg-gray-100"
+                >
+                  <span className="flex items-center gap-3">
+                    {label === "Google Docs" && (
+                      <svg className="w-5 h-5 text-blue-600" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" />
+                      </svg>
+                    )}
+                    {label === "Google Sheets" && (
+                      <svg className="w-5 h-5 text-green-600" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z" />
+                      </svg>
+                    )}
+                    {label === "Google Slides" && (
+                      <svg className="w-5 h-5 text-yellow-600" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14zm-10-7h9v6h-9z" />
+                      </svg>
+                    )}
+                    {label === "Google Vids" && (
+                      <svg className="w-5 h-5 text-gray-400" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z" />
+                      </svg>
+                    )}
+                    {label === "Google Forms" && (
+                      <svg className="w-5 h-5 text-gray-500" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
+                      </svg>
+                    )}
+                    {label === "More" && (
+                      <svg className="w-5 h-5 text-red-600" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" />
+                      </svg>
+                    )}
+                    {label}
+                  </span>
+                  <svg
+                    className="w-4 h-4 text-gray-500"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M9 18l6-6-6-6" />
+                  </svg>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
       </div>
 
 
