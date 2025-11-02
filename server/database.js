@@ -91,27 +91,30 @@ const db = {
   delete: (id) => {
     const data = readDB();
     
-    // Recursively find all children
-    const findAllChildren = (parentId) => {
-      const children = data.files.filter(file => file.parent_folder_id === parentId);
-      let allChildren = [...children];
-      children.forEach(child => {
-        if (child.type === 'folder') {
-          allChildren = allChildren.concat(findAllChildren(child.id));
-        }
-      });
-      return allChildren;
-    };
-
+    // Find the file to be deleted
     const file = data.files.find(f => f.id === id);
-    if (file && file.type === 'folder') {
+    if (!file) return; // File not found
+
+    let idsToDelete = [id];
+
+    // If it's a folder, recursively find all children
+    if (file.type === 'folder') {
+      const findAllChildren = (parentId) => {
+        const children = data.files.filter(file => file.parent_folder_id === parentId);
+        let allChildren = [...children];
+        children.forEach(child => {
+          if (child.type === 'folder') {
+            allChildren = allChildren.concat(findAllChildren(child.id));
+          }
+        });
+        return allChildren;
+      };
+      
       const children = findAllChildren(id);
-      children.forEach(child => {
-        data.files = data.files.filter(f => f.id !== child.id);
-      });
+      idsToDelete = idsToDelete.concat(children.map(c => c.id));
     }
 
-    data.files = data.files.filter(file => file.id !== id);
+    data.files = data.files.filter(file => !idsToDelete.includes(file.id));
     writeDB(data);
   },
 
@@ -123,7 +126,11 @@ const db = {
       file.parent_folder_id === parentFolderId &&
       file.id !== excludeId
     );
-  }
+  },
+
+  // --- NEWLY EXPOSED ---
+  readDB: readDB,
+  writeDB: writeDB
 };
 
 export default db;

@@ -1,6 +1,19 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
-const Header = () => {
+const Header = ({ setSearchQuery }) => {
+  
+  // --- START CHANGES ---
+  const [userInitial, setUserInitial] = useState('A');
+
+  useEffect(() => {
+    const userData = localStorage.getItem('drive-user');
+    if (userData) {
+      const user = JSON.parse(userData);
+      setUserInitial(user.initial || 'A');
+    }
+  }, []);
+  // --- END CHANGES ---
+
   return (
     <header className="h-16 border-b border-gray-200 flex items-center justify-between px-4 bg-white">
       {/* Logo and Title */}
@@ -35,6 +48,7 @@ const Header = () => {
             type="text"
             placeholder="Search in Drive"
             className="w-full pl-12 pr-4 py-3 bg-gray-100 hover:bg-gray-200 focus:bg-white focus:shadow-md rounded-2xl outline-none transition-all"
+            onChange={(e) => setSearchQuery(e.target.value)}
           />
           <div className="absolute inset-y-0 right-0 pr-2 flex items-center">
             <button className="p-2 hover:bg-gray-300 rounded-full">
@@ -66,7 +80,7 @@ const Header = () => {
           </svg>
         </button>
         <button className="ml-2 w-8 h-8 rounded-full bg-purple-600 text-white flex items-center justify-center font-medium hover:bg-purple-700">
-          A
+          {userInitial}
         </button>
       </div>
     </header>

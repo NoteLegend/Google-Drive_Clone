@@ -1,8 +1,66 @@
 import React, { useState, useEffect } from 'react';
 import FileItem from './FileItem';
-import { fetchFiles, deleteFile, toggleStar, downloadFile } from '../utils/api';
+import { fetchFiles, deleteFile, toggleStar, downloadFile, moveFile, uploadFile } from '../utils/api';
 
-const MainContent = ({ parentFolderId, onFolderClick, refreshTrigger, folderStack, currentFolderId, currentFolderName, onNavigateToFolder, showStarred = false, viewMode: currentView = 'my-drive' }) => {
+// --- START NEW COMPONENT ---
+// We define the MoveModal component here for simplicity,
+// but it could be in its own file (e.g., components/MoveModal.jsx)
+const MoveModal = ({ isOpen, onClose, onMove, allFiles, movingFile }) => {
+  if (!isOpen) return null;
+
+  // Filter to only show folders, and not the file/folder being moved
+  const folders = allFiles.filter(f => 
+    f.type === 'folder' &&
+    f.id !== movingFile.id
+    // A more complex implementation would also hide children of the moving folder
+  );
+
+  return (
+    <div 
+      className="fixed inset-0 flex items-center justify-center z-50" 
+      style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
+      onClick={onClose}
+    >
+      <div 
+        className="bg-white rounded-lg shadow-2xl p-6 w-96 max-w-[90vw]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="text-lg font-medium text-gray-900 mb-4">Move "{movingFile.name}"</h2>
+        <div className="max-h-64 overflow-auto border rounded p-2 mb-4">
+          <button 
+            onClick={() => onMove(null)} // Move to Root
+            className="w-full text-left p-2 hover:bg-gray-100 rounded"
+            // Disable moving to root if already in root
+            disabled={movingFile.parentFolderId === null} 
+          >
+            My Drive (Root)
+          </button>
+          {folders.map(folder => (
+            <button 
+              key={folder.id}
+              onClick={() => onMove(folder.id)}
+              className="w-full text-left p-2 hover:bg-gray-100 rounded"
+              // Disable moving to the same folder it's already in
+              disabled={folder.id === movingFile.parentFolderId} 
+            >
+              {folder.name}
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={onClose}
+          className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded transition-colors"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+};
+// --- END NEW COMPONENT ---
+
+
+const MainContent = ({ parentFolderId, onFolderClick, refreshTrigger, folderStack, currentFolderId, currentFolderName, onNavigateToFolder, showStarred = false, viewMode: currentView = 'my-drive', searchQuery }) => {
   // Load view mode from localStorage, default to 'grid'
   const [viewMode, setViewMode] = useState(() => {
     const savedViewMode = localStorage.getItem('drive-view-mode');
@@ -12,6 +70,13 @@ const MainContent = ({ parentFolderId, onFolderClick, refreshTrigger, folderStac
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  
+  // --- START NEW STATE ---
+  const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
+  const [movingFile, setMovingFile] = useState(null);
+  const [isDragging, setIsDragging] = useState(false); // For drag-upload visual
+  // --- END NEW STATE ---
+
 
   // Save view mode to localStorage whenever it changes
   useEffect(() => {
@@ -20,18 +85,35 @@ const MainContent = ({ parentFolderId, onFolderClick, refreshTrigger, folderStac
 
   useEffect(() => {
     loadFiles();
-  }, [parentFolderId, refreshTrigger, showStarred, currentView]);
+  }, [parentFolderId, refreshTrigger, showStarred, currentView, searchQuery]); // <-- searchQuery added
 
   const loadFiles = async () => {
     try {
       setLoading(true);
       setError(null);
-      console.log('MainContent loadFiles - showStarred:', showStarred, 'parentFolderId:', parentFolderId, 'viewMode:', currentView);
-      const data = await fetchFiles(showStarred ? null : parentFolderId, showStarred, currentView);
+      console.log('MainContent loadFiles - showStarred:', showStarred, 'parentFolderId:', parentFolderId, 'viewMode:', currentView, 'searchQuery:', searchQuery);
+      
+      // --- START CHANGE ---
+      // Pass searchQuery to fetchFiles
+      const data = await fetchFiles(showStarred ? null : parentFolderId, showStarred, currentView, searchQuery);
+      // --- END CHANGE ---
+
       console.log('MainContent received', data.length, 'files');
-      // Double-check: filter out any unstarred files on client side as well
-      const filteredData = showStarred ? data.filter(file => file.starred === true) : data;
-      console.log('After client-side filter:', filteredData.length, 'files');
+      
+      let filteredData = data;
+      // If starred, do a client-side filter as a fallback (server should handle it)
+      if (showStarred) {
+        filteredData = data.filter(file => file.starred === true);
+      }
+      // If searching, the server returns all matching files. We don't need to filter by parentId.
+      else if (searchQuery) {
+        filteredData = data;
+      }
+      // If in My Drive and NOT searching, filter by parentFolderId
+      else if (currentView === 'my-drive') {
+         filteredData = data.filter(file => file.parentFolderId === parentFolderId);
+      }
+      
       setFiles(filteredData);
     } catch (err) {
       setError(err.message);
@@ -81,6 +163,73 @@ const MainContent = ({ parentFolderId, onFolderClick, refreshTrigger, folderStac
       alert('Failed to toggle star: ' + err.message);
     }
   };
+
+  // --- START NEW HANDLERS ---
+  const handleMove = (file) => {
+    console.log('Opening move modal for:', file.name);
+    setMovingFile(file);
+    setIsMoveModalOpen(true);
+  };
+
+  const handleConfirmMove = async (movingFileId, newParentFolderId) => {
+    // This function now just needs the IDs
+    const fileToMove = movingFile || files.find(f => f.id === movingFileId);
+    if (!fileToMove) return;
+
+    console.log(`Moving file ${fileToMove.id} to parent ${newParentFolderId}`);
+    
+    try {
+      await moveFile(fileToMove.id, newParentFolderId);
+      setIsMoveModalOpen(false); // Close modal if open
+      setMovingFile(null); // Clear moving file
+      loadFiles(); // Refresh the file list
+    } catch (error) {
+      alert('Failed to move file: ' + error.message);
+      setIsMoveModalOpen(false);
+      setMovingFile(null);
+    }
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Only show drag overlay if files are being dragged (not our own FileItems)
+    if (e.dataTransfer.types.includes('Files')) {
+      setIsDragging(true);
+    }
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    // Check if files are being dropped (from OS)
+    if (e.dataTransfer.types.includes('Files')) {
+      const droppedFiles = [...e.dataTransfer.files];
+      if (droppedFiles.length === 0) return;
+
+      console.log(`Uploading ${droppedFiles.length} files...`);
+      try {
+        // Use Promise.all to upload all files in parallel
+        await Promise.all(
+          droppedFiles.map(file => uploadFile(file, currentFolderId)) // Use currentFolderId
+        );
+        console.log('All files uploaded.');
+        loadFiles(); // Refresh list
+      } catch (error) {
+        alert('Failed to upload one or more files: ' + error.message);
+      }
+    }
+  };
+  // --- END NEW HANDLERS ---
+
 
   // Helper function to get file icon (same as FileItem)
   const getFileIcon = (type) => {
@@ -141,6 +290,20 @@ const MainContent = ({ parentFolderId, onFolderClick, refreshTrigger, folderStac
     }));
 
   const renderEmptyState = () => {
+    // --- START CHANGE ---
+    if (searchQuery) {
+      return (
+        <div className="flex flex-col items-center justify-center py-16">
+          <svg className="w-24 h-24 text-gray-300 mb-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1">
+            <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          <p className="text-lg font-medium text-gray-900 mb-2">No results for "{searchQuery}"</p>
+          <p className="text-sm text-gray-500">Try a different search term.</p>
+        </div>
+      );
+    }
+    // --- END CHANGE ---
+
     if (currentView === 'trash') {
       return (
         <div className="flex flex-col items-center justify-center py-16">
@@ -156,21 +319,10 @@ const MainContent = ({ parentFolderId, onFolderClick, refreshTrigger, folderStac
     if (currentView === 'shared') {
       return (
         <div className="flex flex-col items-center justify-center py-16">
-          <svg
-            className="w-24 h-24 text-gray-300 mb-4"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
-            <path d="M23 21v-2a4 4 0 00-3-3.87" />
-            <path d="M16 3.13a4 4 0 010 7.75" />
-            <path d="M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+          <svg className="w-24 h-24 text-gray-300 mb-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1">
+            <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75M13 7a4 4 0 11-8 0 4 4 0 018 0z" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M16 21v-2a4 4 0 012-3.87M16 3.13a4 4 0 013 3.87M23 11v2a4 4 0 01-2 3.87" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
-
           <p className="text-lg font-medium text-gray-900 mb-2">No shared files</p>
           <p className="text-sm text-gray-500">Share files to see them here</p>
         </div>
@@ -209,7 +361,7 @@ const MainContent = ({ parentFolderId, onFolderClick, refreshTrigger, folderStac
           <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" strokeLinecap="round" strokeLinejoin="round"/>
         </svg>
         <p className="text-lg font-medium text-gray-900 mb-2">No files yet</p>
-        <p className="text-sm text-gray-500">Upload a file or create a folder to get started</p>
+        <p className="text-sm text-gray-500">Drop files or create a folder to get started</p>
       </div>
     );
   };
@@ -247,12 +399,42 @@ const MainContent = ({ parentFolderId, onFolderClick, refreshTrigger, folderStac
       </main>
     );
   }
+  
+  // --- START CHANGE ---
+  // Show different title based on search or view
+  let currentTitle = 'My Drive';
+  if (searchQuery) {
+    currentTitle = `Search results for "${searchQuery}"`;
+  } else if (showStarred) {
+    currentTitle = 'Starred';
+  } else if (currentView === 'trash') {
+    currentTitle = 'Trash';
+  } else if (currentView === 'shared') {
+    currentTitle = 'Shared with me';
+  } else if (currentView === 'recent') {
+    currentTitle = 'Recent';
+  }
+  // --- END CHANGE ---
 
   return (
-    <main className="flex-1 overflow-auto bg-white">
+    <main 
+      className="flex-1 overflow-auto bg-white relative" // <-- ADD relative
+      onDragEnter={handleDragOver} // Use onDragEnter to be more precise
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {/* --- START DRAG OVERLAY --- */}
+      {isDragging && (
+        <div className="absolute inset-0 bg-blue-500 bg-opacity-20 border-4 border-dashed border-blue-600 rounded-lg flex items-center justify-center z-40 pointer-events-none">
+          <p className="text-2xl font-bold text-blue-700">Drop files to upload</p>
+        </div>
+      )}
+      {/* --- END DRAG OVERLAY --- */}
+
       <div className="max-w-7xl mx-auto p-6">
-        {/* Breadcrumb Navigation */}
-        {!showStarred && (folderStack.length > 0 || currentFolderId !== null) && (
+        {/* Breadcrumb Navigation - HIDE if searching */}
+        {!showStarred && !searchQuery && (folderStack.length > 0 || currentFolderId !== null) && (
           <div className="mb-4">
             <nav 
               className="flex items-center"
@@ -365,8 +547,8 @@ const MainContent = ({ parentFolderId, onFolderClick, refreshTrigger, folderStac
           </div>
         )}
 
-        {/* Suggested Section - Only show in My Drive, not in Starred */}
-        {!showStarred && suggestedFiles.length > 0 && (
+        {/* Suggested Section - Only show in My Drive, not in Starred or Search */}
+        {!showStarred && !searchQuery && suggestedFiles.length > 0 && (
           <section className="mb-8">
             <h2 className="text-sm font-medium text-gray-700 mb-3">Suggested</h2>
             <div className="flex gap-4 overflow-x-auto pb-2">
@@ -394,7 +576,7 @@ const MainContent = ({ parentFolderId, onFolderClick, refreshTrigger, folderStac
         <section>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-medium text-gray-700">
-              {showStarred ? 'Starred' : currentView === 'trash' ? 'Trash' : currentView === 'shared' ? 'Shared with me' : 'My Drive'}
+              {currentTitle}
             </h2>
             <div className="flex items-center gap-2">
               <button
@@ -425,7 +607,7 @@ const MainContent = ({ parentFolderId, onFolderClick, refreshTrigger, folderStac
 
           {/* File List/Grid */}
           {viewMode === 'list' ? (
-            <div className="border border-gray-200 rounded-lg overflow-visible">
+            <div className="border border-gray-200 rounded-lg overflow-hidden">
               <table className="w-full">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
@@ -454,6 +636,8 @@ const MainContent = ({ parentFolderId, onFolderClick, refreshTrigger, folderStac
                         onClick={() => handleFileClick(file)}
                         onDelete={handleDelete}
                         onToggleStar={handleToggleStar}
+                        onMove={handleMove}
+                        onMoveFile={handleConfirmMove}
                       />
                     ))
                   )}
@@ -477,6 +661,8 @@ const MainContent = ({ parentFolderId, onFolderClick, refreshTrigger, folderStac
                     onClick={() => handleFileClick(file)}
                     onDelete={handleDelete}
                     onToggleStar={handleToggleStar}
+                    onMove={handleMove}
+                    onMoveFile={handleConfirmMove}
                   />
                 ))
               )}
@@ -484,6 +670,19 @@ const MainContent = ({ parentFolderId, onFolderClick, refreshTrigger, folderStac
           )}
         </section>
       </div>
+
+      {/* --- START MODAL RENDER --- */}
+      <MoveModal
+        isOpen={isMoveModalOpen}
+        onClose={() => setIsMoveModalOpen(false)}
+        // Pass a function that calls handleConfirmMove with the correct arguments
+        onMove={(newParentId) => handleConfirmMove(movingFile.id, newParentId)}
+        // Pass all files so the modal can find folders (simple implementation)
+        // A better way would be to fetch a dedicated folder tree
+        allFiles={files} 
+        movingFile={movingFile}
+      />
+      {/* --- END MODAL RENDER --- */}
     </main>
   );
 };

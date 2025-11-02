@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-const FileItem = ({ file, viewMode, isSelected, onToggleSelect, onClick, onDelete, onToggleStar }) => {
+const FileItem = ({ file, viewMode, isSelected, onToggleSelect, onClick, onDelete, onToggleStar, onMove, onMoveFile }) => {
   const [showMenu, setShowMenu] = useState(false);
-  const [menuPosition, setMenuPosition] = useState('bottom'); // 'top' or 'bottom'
+  const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
   const menuRef = useRef(null);
-  const buttonRef = useRef(null);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -12,15 +12,23 @@ const FileItem = ({ file, viewMode, isSelected, onToggleSelect, onClick, onDelet
         setShowMenu(false);
       }
     };
+    
+    // Close menu on any click or right-click
+    const handleGlobalClick = () => setShowMenu(false);
 
     if (showMenu) {
       document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('click', handleGlobalClick);
+      document.addEventListener('contextmenu', handleGlobalClick);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('click', handleGlobalClick);
+      document.removeEventListener('contextmenu', handleGlobalClick);
     };
   }, [showMenu]);
+
   const getFileIcon = (type) => {
     switch (type) {
       case 'folder':
@@ -79,22 +87,17 @@ const FileItem = ({ file, viewMode, isSelected, onToggleSelect, onClick, onDelet
     }
   };
 
-  const handleMenuClick = (e) => {
+  // --- START NEW/MODIFIED HANDLERS ---
+  const handleContextMenu = (e) => {
+    e.preventDefault();
     e.stopPropagation();
-    if (!showMenu && buttonRef.current) {
-      // Check if there's enough space below, if not, show menu above
-      const rect = buttonRef.current.getBoundingClientRect();
-      const spaceBelow = window.innerHeight - rect.bottom;
-      const spaceAbove = rect.top;
-      const menuHeight = 96; // Approximate height of menu (2 buttons + padding)
-      
-      if (spaceBelow < menuHeight && spaceAbove > spaceBelow) {
-        setMenuPosition('top');
-      } else {
-        setMenuPosition('bottom');
-      }
-    }
-    setShowMenu(!showMenu);
+    setMenuPosition({ x: e.clientX, y: e.clientY });
+    setShowMenu(true);
+  };
+
+  const handleMenuClick = (e) => {
+    // Stop propagation so clicking on the menu doesn't close it
+    e.stopPropagation();
   };
 
   const handleStarClick = (e) => {
@@ -112,13 +115,108 @@ const FileItem = ({ file, viewMode, isSelected, onToggleSelect, onClick, onDelet
     }
     setShowMenu(false);
   };
+  
+  const handleMoveClick = (e) => {
+    e.stopPropagation();
+    if (onMove) {
+      onMove(file); // Pass the whole file object
+    }
+    setShowMenu(false);
+  };
+
+  // --- DRAG-AND-DROP HANDLERS ---
+  const handleDragStart = (e) => {
+    e.stopPropagation();
+    // Set data so we know what file is being dragged
+    e.dataTransfer.setData('application/json', JSON.stringify({ fileId: file.id, type: file.type, name: file.name }));
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e) => {
+    // Only allow dropping ON folders
+    if (file.type === 'folder') {
+      e.preventDefault(); 
+      e.stopPropagation();
+      setIsDraggingOver(true);
+      e.dataTransfer.dropEffect = 'move';
+    }
+  };
+
+  const handleDragLeave = (e) => {
+    if (file.type === 'folder') {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDraggingOver(false);
+    }
+  };
+
+  const handleDrop = (e) => {
+    if (file.type === 'folder') {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDraggingOver(false);
+
+      try {
+        const data = JSON.parse(e.dataTransfer.getData('application/json'));
+        const movingFileId = data.fileId;
+        
+        // Check if we have a valid file ID and it's not being dropped on itself
+        if (movingFileId && movingFileId !== file.id) {
+          // file.id is the ID of the folder we are dropping ONTO
+          console.log(`Dropped file ${movingFileId} onto folder ${file.id}`);
+          onMoveFile(movingFileId, file.id);
+        }
+      } catch (error) {
+        console.error('Failed to parse drag data', error);
+      }
+    }
+  };
+  // --- END NEW/MODIFIED HANDLERS ---
+
+  // Shared component for the context menu
+  const ContextMenu = () => (
+    showMenu && (
+      <div 
+        ref={menuRef}
+        className="fixed w-48 bg-white rounded-md shadow-lg z-50 border border-gray-200"
+        style={{ top: menuPosition.y, left: menuPosition.x }}
+        onClick={handleMenuClick} // Stop propagation
+      >
+        <button
+          onClick={handleStarClick}
+          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+        >
+          {file.starred ? 'Unstar' : 'Add to Starred'}
+        </button>
+        <button
+          onClick={handleMoveClick}
+          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+        >
+          Move
+        </button>
+        <div className="border-t border-gray-100 my-1"></div>
+        <button
+          onClick={handleDeleteClick}
+          className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
+        >
+          Move to Trash
+        </button>
+      </div>
+    )
+  );
 
   if (viewMode === 'list') {
     return (
       <tr 
-        className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer select-none"
+        className={`border-b border-gray-100 hover:bg-gray-50 cursor-pointer select-none ${isDraggingOver ? 'bg-blue-100' : ''}`}
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
+        onContextMenu={handleContextMenu}
+        draggable="true"
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
       >
         <td className="px-4 py-3">
           <div className="flex items-center gap-3">
@@ -135,39 +233,9 @@ const FileItem = ({ file, viewMode, isSelected, onToggleSelect, onClick, onDelet
         <td className="px-4 py-3 text-sm text-gray-600">{file.modified}</td>
         <td className="px-4 py-3 text-sm text-gray-600">{file.size}</td>
         <td className="px-4 py-3 relative">
-          <div ref={menuRef} className="relative">
-            <button 
-              ref={buttonRef}
-              onClick={handleMenuClick}
-              className="p-1 hover:bg-gray-200 rounded"
-            >
-              <svg className="w-5 h-5 text-gray-600" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
-              </svg>
-            </button>
-            {showMenu && (
-              <div 
-                className="absolute right-0 w-48 bg-white rounded-md shadow-lg z-50 border border-gray-200"
-                style={menuPosition === 'top' 
-                  ? { bottom: '100%', marginBottom: '0.25rem', marginTop: '0' }
-                  : { top: '100%', marginTop: '0.25rem', marginBottom: '0' }
-                }
-              >
-              <button
-                onClick={handleStarClick}
-                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-              >
-                {file.starred ? 'Unstar' : 'Star'}
-              </button>
-              <button
-                onClick={handleDeleteClick}
-                className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
-              >
-                Delete
-              </button>
-            </div>
-            )}
-          </div>
+          {/* The 3-dot menu button is removed. */}
+          {/* The ContextMenu component will be rendered at the root of the app (handled by its 'fixed' positioning) */}
+          <ContextMenu />
         </td>
       </tr>
     );
@@ -175,9 +243,15 @@ const FileItem = ({ file, viewMode, isSelected, onToggleSelect, onClick, onDelet
 
   return (
     <div 
-      className="group relative border border-gray-200 rounded-lg p-4 hover:bg-gray-50 hover:shadow-md transition-all cursor-pointer select-none"
+      className={`group relative border rounded-lg p-4 hover:bg-gray-50 hover:shadow-md transition-all cursor-pointer select-none ${isDraggingOver ? 'border-blue-500 bg-blue-100 shadow-lg' : 'border-gray-200'}`}
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
+      onContextMenu={handleContextMenu}
+      draggable="true"
+      onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
     >
       {file.starred && (
         <div className="absolute top-2 right-2 z-10">
@@ -186,37 +260,17 @@ const FileItem = ({ file, viewMode, isSelected, onToggleSelect, onClick, onDelet
           </svg>
         </div>
       )}
-      <div ref={menuRef} className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-        <button
-          onClick={handleMenuClick}
-          className="p-1 bg-white rounded shadow hover:bg-gray-100"
-        >
-          <svg className="w-4 h-4 text-gray-600" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
-          </svg>
-        </button>
-        {showMenu && (
-          <div className="absolute right-0 mt-1 w-48 bg-white rounded-md shadow-lg z-20 border border-gray-200">
-            <button
-              onClick={handleStarClick}
-              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-            >
-              {file.starred ? 'Unstar' : 'Star'}
-            </button>
-            <button
-              onClick={handleDeleteClick}
-              className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
-            >
-              Delete
-            </button>
-          </div>
-        )}
-      </div>
-      <div className="w-full aspect-square mb-3 flex items-center justify-center">
+      
+      {/* The 3-dot menu button is removed */}
+
+      {/* Render the context menu */}
+      <ContextMenu />
+
+      <div className="w-full aspect-square mb-3 flex items-center justify-center pointer-events-none">
         <div className="w-16 h-16">{getFileIcon(file.type)}</div>
       </div>
-      <p className="text-sm text-gray-900 truncate mb-1">{file.name}</p>
-      <p className="text-xs text-gray-500">{file.modified}</p>
+      <p className="text-sm text-gray-900 truncate mb-1 pointer-events-none">{file.name}</p>
+      <p className="text-xs text-gray-500 pointer-events-none">{file.modified}</p>
     </div>
   );
 };

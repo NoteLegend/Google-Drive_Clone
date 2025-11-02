@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { uploadFile, createFolder, getStorageInfo } from '../utils/api';
 
 const Sidebar = ({ currentFolderId, onFileUpload, onFolderCreate, viewMode, onViewModeChange }) => {
-  const [activeItem, setActiveItem] = useState(viewMode || 'my-drive');
+  const [activeItem, setActiveItem] = useState(viewMode || 'home'); // Default to 'home'
   const [isNewOpen, setIsNewOpen] = useState(false);
   const [isFolderDialogOpen, setIsFolderDialogOpen] = useState(false);
   const [folderName, setFolderName] = useState('Untitled folder');
@@ -10,6 +10,7 @@ const Sidebar = ({ currentFolderId, onFileUpload, onFolderCreate, viewMode, onVi
   const folderInputRef = useRef(null);
   const newMenuRef = useRef(null);
   const fileInputRef = useRef(null);
+  const folderUploadInputRef = useRef(null); // <-- For folder uploads
 
   useEffect(() => {
     // Sync activeItem with viewMode prop
@@ -59,25 +60,8 @@ const Sidebar = ({ currentFolderId, onFileUpload, onFolderCreate, viewMode, onVi
     };
 
     loadStorageInfo();
-
-    // Refresh storage info periodically
-    const interval = setInterval(loadStorageInfo, 3000); // Refresh every 3 seconds
-
-    return () => clearInterval(interval);
-  }, []);
-
-  // Refresh storage when files are uploaded or folders are created/deleted
-  useEffect(() => {
-    const loadStorageInfo = async () => {
-      try {
-        const info = await getStorageInfo();
-        setStorageInfo(info);
-      } catch (error) {
-        console.error('Failed to load storage info:', error);
-      }
-    };
-    loadStorageInfo();
-  }, [onFileUpload, onFolderCreate]);
+    // Refresh storage info on file/folder changes
+  }, [onFileUpload, onFolderCreate]); // Simplified trigger
 
   const handleCreateFolder = async () => {
     const name = folderName.trim() || 'Untitled folder';
@@ -98,20 +82,78 @@ const Sidebar = ({ currentFolderId, onFileUpload, onFolderCreate, viewMode, onVi
     setFolderName('Untitled folder');
   };
 
-  const menuItems = [
+  // --- START NEW FILE UPLOAD HANDLER ---
+  const handleFileUpload = async (e) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      const file = files[0];
+      try {
+        await uploadFile(file, currentFolderId);
+        if (onFileUpload) onFileUpload();
+      } catch (error) {
+        alert('Failed to upload file: ' + error.message);
+      }
+    }
+    // Reset input value to allow uploading the same file again
+    e.target.value = '';
+  };
+  // --- END NEW FILE UPLOAD HANDLER ---
+
+  // --- START NEW FOLDER UPLOAD HANDLER ---
+  // Note: This is a complex feature. For a hackathon, we'll simulate
+  // by just uploading the files and creating the top-level folder.
+  // A true implementation requires recursive API calls.
+  const handleFolderUpload = async (e) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      // Get the top-level folder name from the relative path
+      const folderName = files[0].webkitRelativePath.split('/')[0];
+      
+      alert(`Folder Upload: ${files.length} files selected from folder "${folderName}".\n\nNote: For this simulation, we will upload all files to a new folder named "${folderName}" in the current directory.`);
+
+      try {
+        // 1. Create the new parent folder
+        const newFolder = await createFolder(folderName, currentFolderId);
+        
+        // 2. Upload all files into that new folder
+        await Promise.all(
+          Array.from(files).map(file => uploadFile(file, newFolder.id))
+        );
+        
+        if (onFolderCreate) onFolderCreate(); // Trigger a refresh
+      } catch (error) {
+        alert('Failed to upload folder: ' + error.message);
+      }
+    }
+    // Reset input
+    e.target.value = '';
+  };
+  // --- END NEW FOLDER UPLOAD HANDLER ---
+
+  // --- RE-ORGANIZED MENU ITEMS ---
+  const menuItemsTop = [
+    { id: 'home', label: 'Home', icon: 'home' },
     { id: 'my-drive', label: 'My Drive', icon: 'drive' },
     { id: 'shared', label: 'Shared with me', icon: 'shared' },
     { id: 'recent', label: 'Recent', icon: 'recent' },
     { id: 'starred', label: 'Starred', icon: 'star' },
-    { id: 'trash', label: 'Trash', icon: 'trash' },
   ];
 
-  const storageItems = [
+  const menuItemsBottom = [
+    { id: 'spam', label: 'Spam', icon: 'spam' },
+    { id: 'trash', label: 'Trash', icon: 'trash' },
     { id: 'storage', label: 'Storage', icon: 'cloud' },
   ];
+  // --- END RE-ORGANIZED MENU ITEMS ---
 
   const renderIcon = (iconType) => {
     switch (iconType) {
+      case 'home':
+        return (
+          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+          </svg>
+        );
       case 'drive':
         return (
           <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
@@ -136,6 +178,14 @@ const Sidebar = ({ currentFolderId, onFileUpload, onFolderCreate, viewMode, onVi
             <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
           </svg>
         );
+      // --- START NEW SPAM ICON ---
+      case 'spam':
+        return (
+          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15h-2v-2h2v2zm0-4h-2V7h2v6zm4-4h-2V7h2v6zm0 4h-2v-2h2v2z"/>
+          </svg>
+        );
+      // --- END NEW SPAM ICON ---
       case 'trash':
         return (
           <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
@@ -150,6 +200,13 @@ const Sidebar = ({ currentFolderId, onFileUpload, onFolderCreate, viewMode, onVi
         );
       default:
         return null;
+    }
+  };
+
+  const handleItemClick = (itemId) => {
+    setActiveItem(itemId);
+    if (onViewModeChange) {
+      onViewModeChange(itemId);
     }
   };
 
@@ -183,11 +240,11 @@ const Sidebar = ({ currentFolderId, onFileUpload, onFolderCreate, viewMode, onVi
 
           <div
             role="menu"
-            className={`absolute left-0 top-[-40px] z-50 w-72 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden
+            className={`absolute left-0 top-full mt-2 z-50 w-72 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden
       origin-top-left transform transition-all duration-200 ease-out
       ${isNewOpen
-                ? 'opacity-100 translate-y-10 pointer-events-auto'
-                : 'opacity-0 -translate-y-2 pointer-events-none'}`}
+                ? 'opacity-100 scale-100 pointer-events-auto'
+                : 'opacity-0 scale-95 pointer-events-none'}`}
           >
             <div className="py-1">
               <button
@@ -203,28 +260,28 @@ const Sidebar = ({ currentFolderId, onFileUpload, onFolderCreate, viewMode, onVi
                   </svg>
                   New folder
                 </span>
-                <span className="text-xs text-gray-500">Alt+C then F</span>
+                {/* <span className="text-xs text-gray-500">Alt+C then F</span> */}
               </button>
 
               <div className="border-t border-gray-200"></div>
 
+              {/* --- START HIDDEN INPUTS --- */}
               <input
                 type="file"
                 ref={fileInputRef}
                 style={{ display: 'none' }}
-                onChange={async (e) => {
-                  const file = e.target.files[0];
-                  if (file) {
-                    try {
-                      await uploadFile(file, currentFolderId);
-                      if (onFileUpload) onFileUpload();
-                    } catch (error) {
-                      alert('Failed to upload file: ' + error.message);
-                    }
-                  }
-                  e.target.value = '';
-                }}
+                onChange={handleFileUpload}
               />
+              <input
+                type="file"
+                ref={folderUploadInputRef}
+                style={{ display: 'none' }}
+                onChange={handleFolderUpload}
+                webkitdirectory=""
+                directory=""
+              />
+              {/* --- END HIDDEN INPUTS --- */}
+
 
               <button
                 onClick={() => {
@@ -239,22 +296,30 @@ const Sidebar = ({ currentFolderId, onFileUpload, onFolderCreate, viewMode, onVi
                   </svg>
                   File upload
                 </span>
-                <span className="text-xs text-gray-500">Alt+C then U</span>
+                {/* <span className="text-xs text-gray-500">Alt+C then U</span> */}
               </button>
 
-              <button className="w-full flex items-center justify-between px-4 py-2.5 text-sm text-gray-800 hover:bg-gray-100">
+              {/* --- START FOLDER UPLOAD BUTTON --- */}
+              <button 
+                onClick={() => {
+                  setIsNewOpen(false);
+                  folderUploadInputRef.current?.click();
+                }}
+                className="w-full flex items-center justify-between px-4 py-2.5 text-sm text-gray-800 hover:bg-gray-100"
+              >
                 <span className="flex items-center gap-3">
                   <svg className="w-5 h-5 text-gray-700" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
                   </svg>
                   Folder upload
                 </span>
-                <span className="text-xs text-gray-500">Alt+C then I</span>
+                {/* <span className="text-xs text-gray-500">Alt+C then I</span> */}
               </button>
+              {/* --- END FOLDER UPLOAD BUTTON --- */}
 
               <div className="border-t border-gray-200 my-1"></div>
 
-              {["Google Docs", "Google Sheets", "Google Slides", "Google Vids", "Google Forms", "More"].map((label) => (
+              {["Google Docs", "Google Sheets", "Google Slides"].map((label) => (
                 <button
                   key={label}
                   className="w-full flex items-center justify-between px-4 py-2.5 text-sm text-gray-800 hover:bg-gray-100"
@@ -273,21 +338,6 @@ const Sidebar = ({ currentFolderId, onFileUpload, onFolderCreate, viewMode, onVi
                     {label === "Google Slides" && (
                       <svg className="w-5 h-5 text-yellow-600" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14zm-10-7h9v6h-9z" />
-                      </svg>
-                    )}
-                    {label === "Google Vids" && (
-                      <svg className="w-5 h-5 text-gray-400" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z" />
-                      </svg>
-                    )}
-                    {label === "Google Forms" && (
-                      <svg className="w-5 h-5 text-gray-500" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
-                      </svg>
-                    )}
-                    {label === "More" && (
-                      <svg className="w-5 h-5 text-red-600" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" />
                       </svg>
                     )}
                     {label}
@@ -314,25 +364,21 @@ const Sidebar = ({ currentFolderId, onFileUpload, onFolderCreate, viewMode, onVi
 
       {/* Navigation Items */}
       <nav className="flex-1 px-2">
+        {/* --- TOP GROUP --- */}
         <ul className="space-y-1">
-          {menuItems.map((item) => (
+          {menuItemsTop.map((item) => (
             <li key={item.id}>
               <button
-                onClick={() => {
-                  setActiveItem(item.id);
-                  if (onViewModeChange) {
-                    onViewModeChange(item.id);
-                  }
-                }}
+                onClick={() => handleItemClick(item.id)}
                 className={`w-full flex items-center gap-4 px-4 py-2 rounded-full text-sm transition-colors ${activeItem === item.id
-                  ? 'bg-blue-50 text-blue-700'
+                  ? 'bg-blue-100 text-blue-700'
                   : 'text-gray-700 hover:bg-gray-100'
                   }`}
               >
                 <span className={activeItem === item.id ? 'text-blue-700' : 'text-gray-600'}>
                   {renderIcon(item.icon)}
                 </span>
-                <span className="font-medium">{item.label}</span>
+                <span className={activeItem === item.id ? 'font-medium' : ''}>{item.label}</span>
               </button>
             </li>
           ))}
@@ -340,20 +386,21 @@ const Sidebar = ({ currentFolderId, onFileUpload, onFolderCreate, viewMode, onVi
 
         <div className="my-4 border-t border-gray-200"></div>
 
+        {/* --- BOTTOM GROUP --- */}
         <ul className="space-y-1">
-          {storageItems.map((item) => (
+          {menuItemsBottom.map((item) => (
             <li key={item.id}>
               <button
-                onClick={() => setActiveItem(item.id)}
+                onClick={() => handleItemClick(item.id)}
                 className={`w-full flex items-center gap-4 px-4 py-2 rounded-full text-sm transition-colors ${activeItem === item.id
-                  ? 'bg-blue-50 text-blue-700'
+                  ? 'bg-blue-100 text-blue-700'
                   : 'text-gray-700 hover:bg-gray-100'
                   }`}
               >
                 <span className={activeItem === item.id ? 'text-blue-700' : 'text-gray-600'}>
                   {renderIcon(item.icon)}
                 </span>
-                <span className="font-medium">{item.label}</span>
+                <span className={activeItem === item.id ? 'font-medium' : ''}>{item.label}</span>
               </button>
             </li>
           ))}

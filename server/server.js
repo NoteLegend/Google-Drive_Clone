@@ -36,7 +36,10 @@ const storage = multer.diskStorage({
       // Get folder path from database
       const folder = db.get(parentFolderId);
       if (folder) {
-        uploadPath = join(__dirname, '..', folder.path);
+        // --- FIX: Use folder.path, not __dirname ---
+        // folder.path is relative to public (e.g., 'uploads/My Folder')
+        // We need the full FS path, which is relative to the project root
+        uploadPath = join(__dirname, '..', 'public', folder.path);
       }
     }
 
@@ -59,13 +62,15 @@ const storage = multer.diskStorage({
     if (parentFolderId) {
       const folder = db.get(parentFolderId);
       if (folder) {
-        uploadPath = join(__dirname, '..', folder.path);
+        // --- FIX: Use folder.path ---
+        uploadPath = join(__dirname, '..', 'public', folder.path);
       }
     }
 
     while (fs.existsSync(join(uploadPath, filename))) {
-      const ext = originalName.substring(originalName.lastIndexOf('.'));
-      const nameWithoutExt = originalName.substring(0, originalName.lastIndexOf('.'));
+      const extMatch = originalName.match(/\.[^.]+$/);
+      const ext = extMatch ? extMatch[0] : '';
+      const nameWithoutExt = ext ? originalName.substring(0, originalName.lastIndexOf(ext)) : originalName;
       filename = `${nameWithoutExt} (${counter})${ext}`;
       counter++;
     }
@@ -114,13 +119,25 @@ app.get('/api/files', (req, res) => {
     const parentFolderId = req.query.parentFolderId ? parseInt(req.query.parentFolderId) : null;
     const starred = req.query.starred === 'true';
     const viewMode = req.query.viewMode || 'my-drive';
+    // --- START CHANGES ---
+    const search = req.query.search || '';
     
-    console.log('GET /api/files - Query params:', { parentFolderId, starred: req.query.starred, starredBoolean: starred, viewMode });
+    console.log('GET /api/files - Query params:', { parentFolderId, starred: req.query.starred, starredBoolean: starred, viewMode, search });
+    // --- END CHANGES ---
     
     // Read database directly to get all files
     const data = JSON.parse(fs.readFileSync(join(__dirname, '..', 'database.json'), 'utf8'));
     let allFiles = data.files || [];
     
+    // --- START SEARCH LOGIC ---
+    if (search) {
+      allFiles = allFiles.filter(file => 
+        file.name.toLowerCase().includes(search.toLowerCase())
+      );
+      console.log(`Search filter: Found ${allFiles.length} files matching "${search}"`);
+    }
+    // --- END SEARCH LOGIC ---
+
     // Filter files based on viewMode
     let files;
     
@@ -147,7 +164,10 @@ app.get('/api/files', (req, res) => {
       // Limit to most recent 50 files
       files = files.slice(0, 50);
       console.log(`Recent filter: Found ${files.length} recent files`);
+    
+    // --- START CHANGES ---
     } else if (starred) {
+    // --- END CHANGES ---
       // For starred, we need all files regardless of parent
       // Filter only starred files (starred === 1 or starred === true)
       files = allFiles.filter(file => {
@@ -157,8 +177,17 @@ app.get('/api/files', (req, res) => {
         return isStarred && !isDeleted(file);
       });
       console.log(`Starred filter: Found ${files.length} starred files out of ${allFiles.length} total files`);
+    
+    // --- START CHANGES ---
+    } else if (search) {
+      // If we searched, we already have our filtered list from allFiles.
+      // Just filter out deleted files.
+      files = allFiles.filter(file => !isDeleted(file));
+    // --- END CHANGES ---
+    
     } else {
       // My Drive: filter by parentFolderId and exclude deleted files
+      // --- FIX: Use db.getAll which is the abstraction ---
       files = db.getAll(parentFolderId);
       files = files.filter(file => !isDeleted(file));
     }
@@ -184,7 +213,7 @@ app.get('/api/files', (req, res) => {
         year: 'numeric' 
       }),
       owner: file.owner || 'me',
-      starred: file.starred === 1,
+      starred: file.starred === 1 || file.starred === true,
       path: file.path,
       parentFolderId: file.parent_folder_id
     }));
@@ -205,11 +234,15 @@ app.post('/api/files/upload', upload.single('file'), (req, res) => {
 
     const parentFolderId = req.body.parentFolderId ? parseInt(req.body.parentFolderId) : null;
     let filePath = `uploads/${req.file.filename}`;
+    let fsPath = join(uploadsDir, req.file.filename); // Full FS path
 
     if (parentFolderId) {
       const folder = db.get(parentFolderId);
       if (folder) {
         filePath = `${folder.path}/${req.file.filename}`;
+        // --- FIX: Correctly get fsPath from req.file ---
+        // req.file.path is the full FS path where multer saved it
+        fsPath = req.file.path;
       }
     }
 
@@ -219,7 +252,7 @@ app.post('/api/files/upload', upload.single('file'), (req, res) => {
       name: req.file.filename,
       type: fileType,
       size: req.file.size,
-      path: filePath,
+      path: filePath, // Store the relative path
       parent_folder_id: parentFolderId,
       starred: 0,
       deleted: 0,
@@ -264,10 +297,15 @@ app.post('/api/folders', (req, res) => {
       const folder = db.get(parsedParentId);
       if (folder) {
         folderPath = `${folder.path}/${name.trim()}`;
-        // Files are stored in public/uploads, so include 'public' in the path
+        // --- FIX: Correct base path ---
+        // folder.path is 'uploads/...'
+        // We need to join from the 'public' folder's parent
         fullPath = join(__dirname, '..', 'public', folder.path, name.trim());
       }
     }
+    
+    // Ensure path uses forward slashes for consistency
+    folderPath = folderPath.replace(/\\/g, '/');
 
     // Create folder directory
     if (!fs.existsSync(fullPath)) {
@@ -317,23 +355,27 @@ app.delete('/api/files/:id', (req, res) => {
 
     // If it's a folder, also mark all children as deleted recursively
     if (file.type === 'folder') {
-      const findAllChildren = (parentId) => {
-        const children = db.getAll(parentId);
-        let allChildren = [...children];
-        children.forEach(child => {
-          if (child.type === 'folder') {
-            allChildren = allChildren.concat(findAllChildren(child.id));
+      // --- FIX: Use db.readDB to get ALL files, not just children in current folder ---
+      const data = db.readDB();
+      let childrenIds = [];
+
+      const findChildrenRecursive = (parentId) => {
+        data.files.forEach(f => {
+          if (f.parent_folder_id === parentId) {
+            childrenIds.push(f.id);
+            if (f.type === 'folder') {
+              findChildrenRecursive(f.id);
+            }
           }
         });
-        return allChildren;
       };
 
-      const children = findAllChildren(fileId);
-      console.log(`Moving folder ${file.name} (ID: ${fileId}) with ${children.length} children to trash`);
+      findChildrenRecursive(fileId);
+      console.log(`Moving folder ${file.name} (ID: ${fileId}) with ${childrenIds.length} children to trash`);
       
       // Mark all children as deleted
-      children.forEach(child => {
-        db.update(child.id, { deleted: 1 });
+      childrenIds.forEach(childId => {
+        db.update(childId, { deleted: 1 });
       });
     }
 
@@ -343,6 +385,89 @@ app.delete('/api/files/:id', (req, res) => {
     res.status(500).json({ error: 'Failed to delete file: ' + error.message });
   }
 });
+
+// --- START NEW ENDPOINT ---
+// PUT /api/files/:id/move - Move a file or folder
+app.put('/api/files/:id/move', (req, res) => {
+  try {
+    const fileId = parseInt(req.params.id);
+    // newParentFolderId can be null (moving to root)
+    const newParentFolderId = req.body.newParentFolderId !== undefined ? (req.body.newParentFolderId === null ? null : parseInt(req.body.newParentFolderId)) : undefined;
+
+    if (newParentFolderId === undefined) {
+      return res.status(400).json({ error: 'newParentFolderId is required' });
+    }
+
+    const file = db.get(fileId);
+    if (!file) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+    
+    if (file.id === newParentFolderId) {
+      return res.status(400).json({ error: 'Cannot move a folder into itself' });
+    }
+
+    const oldPath = file.path;
+    const oldFsPath = join(__dirname, '..', 'public', oldPath);
+
+    let newParentPath = 'uploads';
+    if (newParentFolderId !== null) {
+      const newParentFolder = db.get(newParentFolderId);
+      if (!newParentFolder) {
+        return res.status(404).json({ error: 'Target folder not found' });
+      }
+      if (newParentFolder.type !== 'folder') {
+        return res.status(400).json({ error: 'Target must be a folder' });
+      }
+      newParentPath = newParentFolder.path;
+    }
+
+    const newPath = join(newParentPath, file.name).replace(/\\/g, '/'); // Ensure forward slashes
+    const newFsPath = join(__dirname, '..', 'public', newPath);
+
+    // Check for conflicts
+    if (db.exists(file.name, newParentFolderId, file.id)) {
+       return res.status(400).json({ error: `An item named "${file.name}" already exists in that folder.` });
+    }
+
+    // 1. Move file on filesystem
+    if (fs.existsSync(oldFsPath)) {
+      fs.renameSync(oldFsPath, newFsPath);
+      console.log(`Moved fs object from ${oldFsPath} to ${newFsPath}`);
+    } else {
+      console.warn(`File not found at ${oldFsPath}, updating DB path only.`);
+    }
+
+    // 2. Update DB
+    db.update(fileId, { parent_folder_id: newParentFolderId, path: newPath });
+    
+    // 3. (CRITICAL) If it's a folder, update paths of all children
+    if (file.type === 'folder') {
+      const data = db.readDB(); // Need to read directly to modify
+      
+      const updateChildPaths = (parentId, parentPath) => {
+        data.files.forEach(f => {
+          if (f.parent_folder_id === parentId) {
+            const childNewPath = join(parentPath, f.name).replace(/\\/g, '/');
+            f.path = childNewPath; // Update path in the data object
+            if (f.type === 'folder') {
+              updateChildPaths(f.id, childNewPath);
+            }
+          }
+        });
+      };
+      
+      updateChildPaths(fileId, newPath);
+      db.writeDB(data); // Commit all path changes
+    }
+
+    res.json({ message: 'File moved successfully', newPath: newPath });
+  } catch (error) {
+    console.error('Error moving file:', error);
+    res.status(500).json({ error: 'Failed to move file: ' + error.message });
+  }
+});
+// --- END NEW ENDPOINT ---
 
 // PUT /api/files/:id/star - Toggle star status
 app.put('/api/files/:id/star', (req, res) => {
@@ -354,7 +479,7 @@ app.put('/api/files/:id/star', (req, res) => {
       return res.status(404).json({ error: 'File not found' });
     }
 
-    const newStarred = file.starred === 1 ? 0 : 1;
+    const newStarred = (file.starred === 1 || file.starred === true) ? 0 : 1;
     db.update(fileId, { starred: newStarred });
 
     res.json({ starred: newStarred === 1 });
@@ -410,16 +535,17 @@ app.get('/api/files/:id/download', (req, res) => {
       return res.status(400).json({ error: 'Cannot download a folder' });
     }
 
-    // Construct the full file path - file.path is relative like "uploads/filename" or "uploads/folder/filename"
-    // Files are stored in public/uploads, so we need to include 'public' in the path
+    // Construct the full file path - file.path is relative like "uploads/filename"
+    // The base is 'public'
     let filePath = join(__dirname, '..', 'public', file.path);
     
-    // If file.path already starts with 'public/', don't add it again
+    // Handle potential mismatch if path already includes 'public' (it shouldn't based on logic)
     if (file.path.startsWith('public/')) {
       filePath = join(__dirname, '..', file.path);
     }
 
     if (!fs.existsSync(filePath)) {
+      console.error(`File not found on disk at: ${filePath}`);
       return res.status(404).json({ error: 'File not found on disk' });
     }
 
@@ -450,9 +576,8 @@ app.get('*', (req, res) => {
     res.sendFile(indexHtmlPath);
   } else {
     // In development, if dist doesn't exist, send a helpful message
-    res.status(503).json({ 
-      error: 'Production build not found. Please run "npm run build" first.',
-      message: 'This server is for production. For development, use "npm run dev:full"'
+    res.status(200).json({ 
+      message: 'Vite dev server is running. This is the production backend.'
     });
   }
 });

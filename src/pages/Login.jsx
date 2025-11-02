@@ -9,6 +9,27 @@ function Login() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+
+    // --- START CHANGES ---
+    if (email.trim() === '') {
+      alert('Please enter an email.');
+      return;
+    }
+
+    // Simulate a user
+    const name = email.split('@')[0].replace(/[^a-zA-Z0-9]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    const initial = name.charAt(0).toUpperCase() || 'A';
+
+    const fakeUser = {
+      email: email,
+      name: name,
+      initial: initial,
+    };
+
+    // Store this "session"
+    localStorage.setItem('drive-user', JSON.stringify(fakeUser));
+    // --- END CHANGES ---
+
     // Accept any credentials and redirect to dashboard
     navigate('/home');
   };
@@ -59,7 +80,6 @@ function Login() {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Password"
               className="w-full px-4 py-3 text-base border border-gray-300 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
-              required
             />
             <button
               type="button"
@@ -127,4 +147,3 @@ function Login() {
 }
 
 export default Login;
-
