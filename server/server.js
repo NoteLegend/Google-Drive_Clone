@@ -22,7 +22,9 @@ app.use('/uploads', express.static(uploadsDir));
 
 // Serve static files from dist folder (production build)
 const distPath = join(__dirname, '..', 'dist');
-app.use(express.static(distPath));
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath));
+}
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -390,7 +392,7 @@ app.put('/api/files/:id/star', (req, res) => {
 app.get('/api/storage', (req, res) => {
   try {
     // Read database directly to get all files recursively
-    const data = JSON.parse(fs.readFileSync(join(__dirname, 'database.json'), 'utf8'));
+    const data = JSON.parse(fs.readFileSync(join(__dirname, '..', 'database.json'), 'utf8'));
     const allFiles = data.files || [];
     
     // Filter out folders (they don't take storage space)
@@ -466,7 +468,17 @@ app.get('*', (req, res) => {
   if (req.path.startsWith('/api/')) {
     return res.status(404).json({ error: 'API route not found' });
   }
-  res.sendFile(join(distPath, 'index.html'));
+  // Only serve index.html if dist folder exists (production build)
+  const indexHtmlPath = join(distPath, 'index.html');
+  if (fs.existsSync(indexHtmlPath)) {
+    res.sendFile(indexHtmlPath);
+  } else {
+    // In development, if dist doesn't exist, send a helpful message
+    res.status(503).json({ 
+      error: 'Production build not found. Please run "npm run build" first.',
+      message: 'This server is for production. For development, use "npm run dev:full"'
+    });
+  }
 });
 
 app.listen(PORT, () => {
