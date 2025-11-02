@@ -2,7 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 
 const FileItem = ({ file, viewMode, isSelected, onToggleSelect, onClick, onDelete, onToggleStar }) => {
   const [showMenu, setShowMenu] = useState(false);
+  const [menuPosition, setMenuPosition] = useState('bottom'); // 'top' or 'bottom'
   const menuRef = useRef(null);
+  const buttonRef = useRef(null);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -79,6 +81,19 @@ const FileItem = ({ file, viewMode, isSelected, onToggleSelect, onClick, onDelet
 
   const handleMenuClick = (e) => {
     e.stopPropagation();
+    if (!showMenu && buttonRef.current) {
+      // Check if there's enough space below, if not, show menu above
+      const rect = buttonRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      const menuHeight = 96; // Approximate height of menu (2 buttons + padding)
+      
+      if (spaceBelow < menuHeight && spaceAbove > spaceBelow) {
+        setMenuPosition('top');
+      } else {
+        setMenuPosition('bottom');
+      }
+    }
     setShowMenu(!showMenu);
   };
 
@@ -120,8 +135,9 @@ const FileItem = ({ file, viewMode, isSelected, onToggleSelect, onClick, onDelet
         <td className="px-4 py-3 text-sm text-gray-600">{file.modified}</td>
         <td className="px-4 py-3 text-sm text-gray-600">{file.size}</td>
         <td className="px-4 py-3 relative">
-          <div ref={menuRef}>
+          <div ref={menuRef} className="relative">
             <button 
+              ref={buttonRef}
               onClick={handleMenuClick}
               className="p-1 hover:bg-gray-200 rounded"
             >
@@ -130,7 +146,13 @@ const FileItem = ({ file, viewMode, isSelected, onToggleSelect, onClick, onDelet
               </svg>
             </button>
             {showMenu && (
-              <div className="absolute right-0 mt-1 w-48 bg-white rounded-md shadow-lg z-10 border border-gray-200">
+              <div 
+                className="absolute right-0 w-48 bg-white rounded-md shadow-lg z-50 border border-gray-200"
+                style={menuPosition === 'top' 
+                  ? { bottom: '100%', marginBottom: '0.25rem', marginTop: '0' }
+                  : { top: '100%', marginTop: '0.25rem', marginBottom: '0' }
+                }
+              >
               <button
                 onClick={handleStarClick}
                 className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"

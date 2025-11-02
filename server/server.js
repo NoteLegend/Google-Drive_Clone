@@ -356,6 +356,38 @@ app.put('/api/files/:id/star', (req, res) => {
   }
 });
 
+// GET /api/storage - Get storage usage information
+app.get('/api/storage', (req, res) => {
+  try {
+    // Read database directly to get all files recursively
+    const data = JSON.parse(fs.readFileSync(join(__dirname, 'database.json'), 'utf8'));
+    const allFiles = data.files || [];
+    
+    // Filter out folders (they don't take storage space)
+    const filesOnly = allFiles.filter(file => file.type !== 'folder');
+    
+    // Calculate total size in bytes
+    const totalBytes = filesOnly.reduce((sum, file) => sum + (file.size || 0), 0);
+    
+    // Total storage limit (15 GB in bytes)
+    const totalStorageBytes = 15 * 1024 * 1024 * 1024; // 15 GB
+    
+    // Calculate percentage
+    const percentage = (totalBytes / totalStorageBytes) * 100;
+    
+    res.json({
+      used: totalBytes,
+      total: totalStorageBytes,
+      usedFormatted: formatFileSize(totalBytes),
+      totalFormatted: '15 GB',
+      percentage: Math.min(percentage, 100) // Cap at 100%
+    });
+  } catch (error) {
+    console.error('Error calculating storage:', error);
+    res.status(500).json({ error: 'Failed to calculate storage' });
+  }
+});
+
 // GET /api/files/:id/download - Download a file
 app.get('/api/files/:id/download', (req, res) => {
   try {

@@ -71,6 +71,54 @@ const MainContent = ({ parentFolderId, onFolderClick, refreshTrigger, folderStac
     }
   };
 
+  // Helper function to get file icon (same as FileItem)
+  const getFileIcon = (type) => {
+    switch (type) {
+      case 'folder':
+        return (
+          <svg className="w-6 h-6 text-gray-500" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
+          </svg>
+        );
+      case 'document':
+        return (
+          <svg className="w-6 h-6 text-blue-600" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>
+          </svg>
+        );
+      case 'spreadsheet':
+        return (
+          <svg className="w-6 h-6 text-green-600" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
+          </svg>
+        );
+      case 'presentation':
+        return (
+          <svg className="w-6 h-6 text-yellow-600" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14zm-10-7h9v6h-9z"/>
+          </svg>
+        );
+      case 'pdf':
+        return (
+          <svg className="w-6 h-6 text-red-600" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>
+          </svg>
+        );
+      case 'image':
+        return (
+          <svg className="w-6 h-6 text-purple-600" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/>
+          </svg>
+        );
+      default:
+        return (
+          <svg className="w-6 h-6 text-gray-400" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/>
+          </svg>
+        );
+    }
+  };
+
   const suggestedFiles = files
     .filter(file => file.type !== 'folder')
     .slice(0, 2)
@@ -244,15 +292,7 @@ const MainContent = ({ parentFolderId, onFolderClick, refreshTrigger, folderStac
                 >
                   <div className="flex items-center gap-3">
                     <div className="flex-shrink-0">
-                      {file.type === 'folder' ? (
-                        <svg className="w-6 h-6 text-gray-500" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
-                        </svg>
-                      ) : (
-                        <svg className="w-6 h-6 text-blue-600" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" />
-                        </svg>
-                      )}
+                      {getFileIcon(file.type)}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-900 truncate">{file.name}</p>

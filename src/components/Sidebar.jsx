@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { uploadFile, createFolder } from '../utils/api';
+import { uploadFile, createFolder, getStorageInfo } from '../utils/api';
 
 const Sidebar = ({ currentFolderId, onFileUpload, onFolderCreate }) => {
   const [activeItem, setActiveItem] = useState('my-drive');
   const [isNewOpen, setIsNewOpen] = useState(false);
   const [isFolderDialogOpen, setIsFolderDialogOpen] = useState(false);
   const [folderName, setFolderName] = useState('Untitled folder');
+  const [storageInfo, setStorageInfo] = useState({ used: 0, total: 15 * 1024 * 1024 * 1024, usedFormatted: '0 Bytes', totalFormatted: '15 GB', percentage: 0 });
   const folderInputRef = useRef(null);
   const newMenuRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -39,6 +40,37 @@ const Sidebar = ({ currentFolderId, onFileUpload, onFolderCreate }) => {
       folderInputRef.current.select();
     }
   }, [isFolderDialogOpen]);
+
+  useEffect(() => {
+    const loadStorageInfo = async () => {
+      try {
+        const info = await getStorageInfo();
+        setStorageInfo(info);
+      } catch (error) {
+        console.error('Failed to load storage info:', error);
+      }
+    };
+
+    loadStorageInfo();
+
+    // Refresh storage info periodically
+    const interval = setInterval(loadStorageInfo, 3000); // Refresh every 3 seconds
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Refresh storage when files are uploaded or folders are created/deleted
+  useEffect(() => {
+    const loadStorageInfo = async () => {
+      try {
+        const info = await getStorageInfo();
+        setStorageInfo(info);
+      } catch (error) {
+        console.error('Failed to load storage info:', error);
+      }
+    };
+    loadStorageInfo();
+  }, [onFileUpload, onFolderCreate]);
 
   const handleCreateFolder = async () => {
     const name = folderName.trim() || 'Untitled folder';
@@ -320,10 +352,13 @@ const Sidebar = ({ currentFolderId, onFileUpload, onFolderCreate }) => {
       <div className="p-4 border-t border-gray-200">
         <div className="mb-2">
           <div className="w-full bg-gray-200 rounded-full h-1.5">
-            <div className="bg-blue-600 h-1.5 rounded-full" style={{ width: '15%' }}></div>
+            <div
+              className="bg-blue-600 h-1.5 rounded-full transition-all duration-300"
+              style={{ width: `${storageInfo.percentage}%` }}
+            ></div>
           </div>
         </div>
-        <p className="text-xs text-gray-600">2.3 GB of 15 GB used</p>
+        <p className="text-xs text-gray-600">{storageInfo.usedFormatted} of {storageInfo.totalFormatted} used</p>
         <button className="mt-2 text-xs text-blue-600 hover:bg-blue-50 px-2 py-1 rounded">
           Get more storage
         </button>

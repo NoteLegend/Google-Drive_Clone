@@ -74,6 +74,17 @@ export const toggleStar = async (fileId) => {
   return response.json();
 };
 
+export const getStorageInfo = async () => {
+  const response = await fetch(`${API_BASE}/storage`);
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to fetch storage info');
+  }
+  
+  return response.json();
+};
+
 export const downloadFile = async (fileId, fileName) => {
   const response = await fetch(`${API_BASE}/files/${fileId}/download`);
   
