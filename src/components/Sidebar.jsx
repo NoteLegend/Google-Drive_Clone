@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { uploadFile, createFolder, getStorageInfo } from '../utils/api';
 
-const Sidebar = ({ currentFolderId, onFileUpload, onFolderCreate }) => {
-  const [activeItem, setActiveItem] = useState('my-drive');
+const Sidebar = ({ currentFolderId, onFileUpload, onFolderCreate, viewMode, onViewModeChange }) => {
+  const [activeItem, setActiveItem] = useState(viewMode || 'my-drive');
   const [isNewOpen, setIsNewOpen] = useState(false);
   const [isFolderDialogOpen, setIsFolderDialogOpen] = useState(false);
   const [folderName, setFolderName] = useState('Untitled folder');
@@ -10,6 +10,13 @@ const Sidebar = ({ currentFolderId, onFileUpload, onFolderCreate }) => {
   const folderInputRef = useRef(null);
   const newMenuRef = useRef(null);
   const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    // Sync activeItem with viewMode prop
+    if (viewMode && activeItem !== viewMode) {
+      setActiveItem(viewMode);
+    }
+  }, [viewMode]);
 
   useEffect(() => {
     const onClickOutside = (e) => {
@@ -311,7 +318,12 @@ const Sidebar = ({ currentFolderId, onFileUpload, onFolderCreate }) => {
           {menuItems.map((item) => (
             <li key={item.id}>
               <button
-                onClick={() => setActiveItem(item.id)}
+                onClick={() => {
+                  setActiveItem(item.id);
+                  if (onViewModeChange) {
+                    onViewModeChange(item.id);
+                  }
+                }}
                 className={`w-full flex items-center gap-4 px-4 py-2 rounded-full text-sm transition-colors ${activeItem === item.id
                   ? 'bg-blue-50 text-blue-700'
                   : 'text-gray-700 hover:bg-gray-100'

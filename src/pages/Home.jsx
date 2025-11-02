@@ -8,8 +8,17 @@ function Home() {
   const [currentFolderName, setCurrentFolderName] = useState(null);
   const [folderStack, setFolderStack] = useState([]);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [viewMode, setViewMode] = useState('my-drive'); // 'my-drive', 'starred', 'shared', etc.
 
   const handleFolderClick = (folder) => {
+    // If clicking a folder from starred view, switch to My Drive view first
+    if (viewMode !== 'my-drive') {
+      setViewMode('my-drive');
+      setCurrentFolderId(null);
+      setCurrentFolderName(null);
+      setFolderStack([]);
+    }
+    
     // If we're currently in a folder, add it to the stack before navigating
     if (currentFolderId !== null) {
       setFolderStack([...folderStack, { id: currentFolderId, name: currentFolderName || 'Folder' }]);
@@ -58,6 +67,16 @@ function Home() {
     setRefreshTrigger(prev => prev + 1);
   };
 
+  const handleViewModeChange = (newViewMode) => {
+    setViewMode(newViewMode);
+    // Reset folder navigation when switching views
+    if (newViewMode !== 'my-drive') {
+      setCurrentFolderId(null);
+      setCurrentFolderName(null);
+      setFolderStack([]);
+    }
+  };
+
   return (
     <div className="h-screen flex flex-col overflow-hidden">
       <Header />
@@ -66,15 +85,18 @@ function Home() {
           currentFolderId={currentFolderId}
           onFileUpload={handleRefresh}
           onFolderCreate={handleRefresh}
+          viewMode={viewMode}
+          onViewModeChange={handleViewModeChange}
         />
         <MainContent 
-          parentFolderId={currentFolderId}
+          parentFolderId={viewMode === 'starred' ? null : currentFolderId}
           onFolderClick={handleFolderClick}
           refreshTrigger={refreshTrigger}
           folderStack={folderStack}
           currentFolderId={currentFolderId}
           currentFolderName={currentFolderName}
           onNavigateToFolder={handleNavigateToFolder}
+          showStarred={viewMode === 'starred'}
         />
       </div>
     </div>

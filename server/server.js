@@ -106,7 +106,33 @@ function getFileType(filename) {
 app.get('/api/files', (req, res) => {
   try {
     const parentFolderId = req.query.parentFolderId ? parseInt(req.query.parentFolderId) : null;
-    let files = db.getAll(parentFolderId);
+    const starred = req.query.starred === 'true';
+    
+    console.log('GET /api/files - Query params:', { parentFolderId, starred: req.query.starred, starredBoolean: starred });
+    
+    // Read database directly to get all files for starred filter
+    let files;
+    if (starred) {
+      // For starred, we need all files regardless of parent
+      const data = JSON.parse(fs.readFileSync(join(__dirname, '..', 'database.json'), 'utf8'));
+      const allFiles = data.files || [];
+      console.log(`Total files in database: ${allFiles.length}`);
+      console.log('Sample file starred values:', allFiles.slice(0, 3).map(f => ({ id: f.id, name: f.name, starred: f.starred, starredType: typeof f.starred })));
+      
+      // Filter only starred files (starred === 1 or starred === true)
+      files = allFiles.filter(file => {
+        // Handle both number (1) and boolean (true) values
+        const isStarred = file.starred === 1 || file.starred === true || file.starred === '1';
+        if (!isStarred) {
+          console.log(`Filtered out: ${file.name} (starred=${file.starred}, type=${typeof file.starred})`);
+        }
+        return isStarred;
+      });
+      
+      console.log(`Starred filter: Found ${files.length} starred files out of ${allFiles.length} total files`);
+    } else {
+      files = db.getAll(parentFolderId);
+    }
 
     // Sort: folders first, then by modified date (newest first)
     files = files.sort((a, b) => {
@@ -404,7 +430,12 @@ app.get('/api/files/:id/download', (req, res) => {
 
     // Construct the full file path - file.path is relative like "uploads/filename" or "uploads/folder/filename"
     // Files are stored in public/uploads, so we need to include 'public' in the path
-    const filePath = join(__dirname, '..', 'public', file.path);
+    let filePath = join(__dirname, '..', 'public', file.path);
+    
+    // If file.path already starts with 'public/', don't add it again
+    if (file.path.startsWith('public/')) {
+      filePath = join(__dirname, '..', file.path);
+    }
 
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({ error: 'File not found on disk' });

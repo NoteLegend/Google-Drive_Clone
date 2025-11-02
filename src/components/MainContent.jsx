@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import FileItem from './FileItem';
 import { fetchFiles, deleteFile, toggleStar, downloadFile } from '../utils/api';
 
-const MainContent = ({ parentFolderId, onFolderClick, refreshTrigger, folderStack, currentFolderId, currentFolderName, onNavigateToFolder }) => {
+const MainContent = ({ parentFolderId, onFolderClick, refreshTrigger, folderStack, currentFolderId, currentFolderName, onNavigateToFolder, showStarred = false }) => {
   // Load view mode from localStorage, default to 'grid'
   const [viewMode, setViewMode] = useState(() => {
     const savedViewMode = localStorage.getItem('drive-view-mode');
@@ -20,14 +20,19 @@ const MainContent = ({ parentFolderId, onFolderClick, refreshTrigger, folderStac
 
   useEffect(() => {
     loadFiles();
-  }, [parentFolderId, refreshTrigger]);
+  }, [parentFolderId, refreshTrigger, showStarred]);
 
   const loadFiles = async () => {
     try {
       setLoading(true);
       setError(null);
-      const data = await fetchFiles(parentFolderId);
-      setFiles(data);
+      console.log('MainContent loadFiles - showStarred:', showStarred, 'parentFolderId:', parentFolderId);
+      const data = await fetchFiles(showStarred ? null : parentFolderId, showStarred);
+      console.log('MainContent received', data.length, 'files');
+      // Double-check: filter out any unstarred files on client side as well
+      const filteredData = showStarred ? data.filter(file => file.starred === true) : data;
+      console.log('After client-side filter:', filteredData.length, 'files');
+      setFiles(filteredData);
     } catch (err) {
       setError(err.message);
       console.error('Error loading files:', err);
@@ -38,6 +43,12 @@ const MainContent = ({ parentFolderId, onFolderClick, refreshTrigger, folderStac
 
   const handleFileClick = async (file) => {
     if (file.type === 'folder') {
+      // In starred view, navigate to the folder by switching to My Drive view
+      if (showStarred) {
+        // This will be handled by the parent component to switch to My Drive and navigate
+        onFolderClick(file);
+        return;
+      }
       onFolderClick(file);
     } else {
       // Open/download file
@@ -167,7 +178,7 @@ const MainContent = ({ parentFolderId, onFolderClick, refreshTrigger, folderStac
     <main className="flex-1 overflow-auto bg-white">
       <div className="max-w-7xl mx-auto p-6">
         {/* Breadcrumb Navigation */}
-        {(folderStack.length > 0 || currentFolderId !== null) && (
+        {!showStarred && (folderStack.length > 0 || currentFolderId !== null) && (
           <div className="mb-4">
             <nav 
               className="flex items-center"
@@ -280,8 +291,8 @@ const MainContent = ({ parentFolderId, onFolderClick, refreshTrigger, folderStac
           </div>
         )}
 
-        {/* Suggested Section */}
-        {suggestedFiles.length > 0 && (
+        {/* Suggested Section - Only show in My Drive, not in Starred */}
+        {!showStarred && suggestedFiles.length > 0 && (
           <section className="mb-8">
             <h2 className="text-sm font-medium text-gray-700 mb-3">Suggested</h2>
             <div className="flex gap-4 overflow-x-auto pb-2">
@@ -305,10 +316,10 @@ const MainContent = ({ parentFolderId, onFolderClick, refreshTrigger, folderStac
           </section>
         )}
 
-        {/* My Drive Section */}
+        {/* My Drive / Starred Section */}
         <section>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-medium text-gray-700">My Drive</h2>
+            <h2 className="text-sm font-medium text-gray-700">{showStarred ? 'Starred' : 'My Drive'}</h2>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setViewMode('list')}

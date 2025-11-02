@@ -1,14 +1,28 @@
 const API_BASE = '/api';
 
-export const fetchFiles = async (parentFolderId = null) => {
-  const url = parentFolderId 
-    ? `${API_BASE}/files?parentFolderId=${parentFolderId}`
-    : `${API_BASE}/files`;
+export const fetchFiles = async (parentFolderId = null, starred = false) => {
+  let url = `${API_BASE}/files`;
+  const params = new URLSearchParams();
+  
+  // If starred is true, don't send parentFolderId
+  if (starred) {
+    params.append('starred', 'true');
+  } else if (parentFolderId !== null) {
+    params.append('parentFolderId', parentFolderId);
+  }
+  
+  if (params.toString()) {
+    url += '?' + params.toString();
+  }
+  
+  console.log('fetchFiles called with:', { parentFolderId, starred, url });
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error('Failed to fetch files');
   }
-  return response.json();
+  const data = await response.json();
+  console.log('fetchFiles response:', data.length, 'files');
+  return data;
 };
 
 export const uploadFile = async (file, parentFolderId = null) => {
@@ -86,34 +100,12 @@ export const getStorageInfo = async () => {
 };
 
 export const downloadFile = async (fileId, fileName) => {
-  const response = await fetch(`${API_BASE}/files/${fileId}/download`);
-  
-  if (!response.ok) {
-    // Check if response is JSON before trying to parse
-    const contentType = response.headers.get('content-type');
-    if (contentType && contentType.includes('application/json')) {
-      const error = await response.json();
-      throw new Error(error.error || 'Failed to download file');
-    } else {
-      // If it's HTML or other non-JSON, throw a generic error
-      throw new Error('Failed to download file: Server returned an error');
-    }
-  }
-
-  // Get the blob from the response
-  const blob = await response.blob();
-  
-  // Create a temporary URL for the blob
-  const url = window.URL.createObjectURL(blob);
-  
-  // Create a temporary anchor element and trigger download
+  // Simply create a download link and trigger it
+  const url = `${API_BASE}/files/${fileId}/download`;
   const a = document.createElement('a');
   a.href = url;
   a.download = fileName || 'download';
   document.body.appendChild(a);
   a.click();
-  
-  // Clean up
-  window.URL.revokeObjectURL(url);
   document.body.removeChild(a);
 };
