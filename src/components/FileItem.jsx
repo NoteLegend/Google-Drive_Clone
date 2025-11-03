@@ -4,6 +4,7 @@ const FileItem = ({ file, viewMode, isSelected, onToggleSelect, onClick, onDelet
   const [showMenu, setShowMenu] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
   const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
   const menuRef = useRef(null);
 
   useEffect(() => {
@@ -13,7 +14,6 @@ const FileItem = ({ file, viewMode, isSelected, onToggleSelect, onClick, onDelet
       }
     };
     
-    // Close menu on any click or right-click
     const handleGlobalClick = () => setShowMenu(false);
 
     if (showMenu) {
@@ -71,23 +71,19 @@ const FileItem = ({ file, viewMode, isSelected, onToggleSelect, onClick, onDelet
   };
 
   const handleClick = (e) => {
-    // For files, handle single click
     if (file.type !== 'folder') {
       if (onClick) {
         onClick(file);
       }
     }
-    // For folders, we only handle double-click (see onDoubleClick below)
   };
 
   const handleDoubleClick = (e) => {
-    // For folders, only open on double-click
     if (file.type === 'folder' && onClick) {
       onClick(file);
     }
   };
 
-  // --- START NEW/MODIFIED HANDLERS ---
   const handleContextMenu = (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -96,7 +92,6 @@ const FileItem = ({ file, viewMode, isSelected, onToggleSelect, onClick, onDelet
   };
 
   const handleMenuClick = (e) => {
-    // Stop propagation so clicking on the menu doesn't close it
     e.stopPropagation();
   };
 
@@ -119,21 +114,27 @@ const FileItem = ({ file, viewMode, isSelected, onToggleSelect, onClick, onDelet
   const handleMoveClick = (e) => {
     e.stopPropagation();
     if (onMove) {
-      onMove(file); // Pass the whole file object
+      onMove(file);
     }
     setShowMenu(false);
   };
 
-  // --- DRAG-AND-DROP HANDLERS ---
+  // Three-dot menu button click handler
+  const handleThreeDotsClick = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const rect = e.currentTarget.getBoundingClientRect();
+    setMenuPosition({ x: rect.left, y: rect.bottom + 5 });
+    setShowMenu(true);
+  };
+
   const handleDragStart = (e) => {
     e.stopPropagation();
-    // Set data so we know what file is being dragged
     e.dataTransfer.setData('application/json', JSON.stringify({ fileId: file.id, type: file.type, name: file.name }));
     e.dataTransfer.effectAllowed = 'move';
   };
 
   const handleDragOver = (e) => {
-    // Only allow dropping ON folders
     if (file.type === 'folder') {
       e.preventDefault(); 
       e.stopPropagation();
@@ -160,10 +161,7 @@ const FileItem = ({ file, viewMode, isSelected, onToggleSelect, onClick, onDelet
         const data = JSON.parse(e.dataTransfer.getData('application/json'));
         const movingFileId = data.fileId;
         
-        // Check if we have a valid file ID and it's not being dropped on itself
         if (movingFileId && movingFileId !== file.id) {
-          // file.id is the ID of the folder we are dropping ONTO
-          console.log(`Dropped file ${movingFileId} onto folder ${file.id}`);
           onMoveFile(movingFileId, file.id);
         }
       } catch (error) {
@@ -171,16 +169,14 @@ const FileItem = ({ file, viewMode, isSelected, onToggleSelect, onClick, onDelet
       }
     }
   };
-  // --- END NEW/MODIFIED HANDLERS ---
 
-  // Shared component for the context menu
   const ContextMenu = () => (
     showMenu && (
       <div 
         ref={menuRef}
         className="fixed w-48 bg-white rounded-md shadow-lg z-50 border border-gray-200"
         style={{ top: menuPosition.y, left: menuPosition.x }}
-        onClick={handleMenuClick} // Stop propagation
+        onClick={handleMenuClick}
       >
         <button
           onClick={handleStarClick}
@@ -212,6 +208,8 @@ const FileItem = ({ file, viewMode, isSelected, onToggleSelect, onClick, onDelet
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
         onContextMenu={handleContextMenu}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
         draggable="true"
         onDragStart={handleDragStart}
         onDragOver={handleDragOver}
@@ -233,8 +231,16 @@ const FileItem = ({ file, viewMode, isSelected, onToggleSelect, onClick, onDelet
         <td className="px-4 py-3 text-sm text-gray-600">{file.modified}</td>
         <td className="px-4 py-3 text-sm text-gray-600">{file.size}</td>
         <td className="px-4 py-3 relative">
-          {/* The 3-dot menu button is removed. */}
-          {/* The ContextMenu component will be rendered at the root of the app (handled by its 'fixed' positioning) */}
+          {/* Three-dot menu button - only visible on hover */}
+          <button
+            onClick={handleThreeDotsClick}
+            className={`p-1 hover:bg-gray-200 rounded transition-opacity ${isHovered ? 'opacity-100' : 'opacity-0'}`}
+            title="More actions"
+          >
+            <svg className="w-5 h-5 text-gray-600" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
+            </svg>
+          </button>
           <ContextMenu />
         </td>
       </tr>
@@ -247,6 +253,8 @@ const FileItem = ({ file, viewMode, isSelected, onToggleSelect, onClick, onDelet
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
       onContextMenu={handleContextMenu}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       draggable="true"
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
@@ -261,9 +269,19 @@ const FileItem = ({ file, viewMode, isSelected, onToggleSelect, onClick, onDelet
         </div>
       )}
       
-      {/* The 3-dot menu button is removed */}
+      {/* Three-dot menu button - only visible on hover */}
+      {!file.starred && (
+        <button
+          onClick={handleThreeDotsClick}
+          className={`absolute top-2 right-2 z-10 p-1 hover:bg-gray-200 rounded transition-opacity ${isHovered ? 'opacity-100' : 'opacity-0'}`}
+          title="More actions"
+        >
+          <svg className="w-5 h-5 text-gray-600" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
+          </svg>
+        </button>
+      )}
 
-      {/* Render the context menu */}
       <ContextMenu />
 
       <div className="w-full aspect-square mb-3 flex items-center justify-center pointer-events-none">

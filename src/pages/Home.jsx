@@ -3,8 +3,6 @@ import Header from '../components/Header';
 import Sidebar from '../components/Sidebar';
 import MainContent from '../components/MainContent';
 
-// --- START NEW COMPONENT ---
-// Added the new RightSidebar component as requested
 const RightSidebar = () => {
   const iconButtonClasses = "p-2 hover:bg-gray-200 rounded-full cursor-pointer";
 
@@ -41,23 +39,17 @@ const RightSidebar = () => {
     </aside>
   );
 };
-// --- END NEW COMPONENT ---
-
 
 function Home() {
   const [currentFolderId, setCurrentFolderId] = useState(null);
   const [currentFolderName, setCurrentFolderName] = useState(null);
   const [folderStack, setFolderStack] = useState([]);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-  
-  // --- START CHANGES ---
-  const [viewMode, setViewMode] = useState('home'); // Default to 'home'
+  const [viewMode, setViewMode] = useState('home');
   const [searchQuery, setSearchQuery] = useState(''); 
-  // --- END CHANGES ---
 
   const handleFolderClick = (folder) => {
-    // If clicking a folder from any view other than "My Drive",
-    // switch to "My Drive" first.
+    // If clicking a folder from any view other than "My Drive", switch to "My Drive" first
     if (viewMode !== 'my-drive') {
       setViewMode('my-drive');
       setCurrentFolderId(null);
@@ -88,7 +80,6 @@ function Home() {
     const targetIndex = folderStack.findIndex(f => f.id === targetFolderId);
     
     if (targetIndex !== -1) {
-      // If found in stack, navigate to it by removing everything after it
       const targetFolder = folderStack[targetIndex];
       setFolderStack(folderStack.slice(0, targetIndex));
       setCurrentFolderId(targetFolderId);
@@ -102,30 +93,28 @@ function Home() {
 
   const handleViewModeChange = (newViewMode) => {
     setViewMode(newViewMode);
-    setSearchQuery(''); // Clear search when changing views
+    setSearchQuery('');
     
     // Reset folder navigation when switching to any new root view
-    // This is the correct Drive behavior.
     setCurrentFolderId(null);
     setCurrentFolderName(null);
     setFolderStack([]);
   };
 
-  // --- START CHANGES ---
-  // Determine if the current view is a "root" view (like Home, Starred, etc.)
-  // or a folder-based view (only 'my-drive').
+  // Handle logo click to navigate to Home
+  const handleLogoClick = () => {
+    handleViewModeChange('home');
+  };
+
   const parentId = viewMode === 'my-drive' ? currentFolderId : null;
   const showStarred = viewMode === 'starred';
-  // --- END CHANGES ---
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
-      {/* --- START CHANGES --- */}
       <Header 
         setSearchQuery={setSearchQuery} 
-        onLogoClick={() => handleViewModeChange('home')} // Add logo click handler
+        onLogoClick={handleLogoClick}
       />
-      {/* --- END CHANGES --- */}
 
       <div className="flex flex-1 overflow-hidden">
         <Sidebar 
@@ -136,13 +125,10 @@ function Home() {
           onViewModeChange={handleViewModeChange}
         />
         <MainContent 
-          // --- START CHANGES ---
-          parentFolderId={parentId} // Pass the correct parentId
+          parentFolderId={parentId}
           showStarred={showStarred}
           searchQuery={searchQuery}
-          viewMode={viewMode} // Pass the full viewMode string
-          // --- END CHANGES ---
-          
+          viewMode={viewMode}
           onFolderClick={handleFolderClick}
           refreshTrigger={refreshTrigger}
           folderStack={folderStack}
@@ -150,9 +136,7 @@ function Home() {
           currentFolderName={currentFolderName}
           onNavigateToFolder={handleNavigateToFolder}
         />
-        {/* --- START CHANGES --- */}
         <RightSidebar />
-        {/* --- END CHANGES --- */}
       </div>
     </div>
   );

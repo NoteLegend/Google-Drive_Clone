@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-const Header = ({ setSearchQuery }) => {
-  
-  // --- START CHANGES ---
+const Header = ({ setSearchQuery, onLogoClick }) => {
   const [userInitial, setUserInitial] = useState('A');
 
   useEffect(() => {
@@ -12,18 +10,15 @@ const Header = ({ setSearchQuery }) => {
       setUserInitial(user.initial || 'A');
     }
   }, []);
-  // --- END CHANGES ---
 
   return (
     <header className="h-16 border-b border-gray-200 flex items-center justify-between px-4 bg-white">
-      {/* Logo and Title */}
+      {/* Logo and Title - Now Clickable */}
       <div className="flex items-center gap-4 w-64">
-        {/* <button className="p-2 hover:bg-gray-100 rounded-full">
-          <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none">
-            <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z" fill="currentColor"/>
-          </svg>
-        </button> */}
-        <div className="flex items-center gap-2">
+        <button 
+          onClick={onLogoClick}
+          className="flex items-center gap-2 hover:bg-gray-100 rounded-lg p-1 transition-colors"
+        >
           <svg className="w-10 h-10" viewBox="0 0 87.3 78">
             <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da" />
             <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47" />
@@ -33,11 +28,11 @@ const Header = ({ setSearchQuery }) => {
             <path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00" />
           </svg>
           <span className="text-xl text-gray-700">Drive</span>
-        </div>
+        </button>
       </div>
 
       {/* Search Bar */}
-      <div className="flex-1 max-w-3xl mx-4">
+      {/* <div className="flex-1 max-w-3xl mx-4">
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
             <svg className="w-5 h-5 text-gray-500" viewBox="0 0 24 24" fill="none">
@@ -58,7 +53,7 @@ const Header = ({ setSearchQuery }) => {
             </button>
           </div>
         </div>
-      </div>
+      </div> */}
 
       {/* Right Side Icons */}
       <div className="flex items-center gap-1">
