@@ -31,7 +31,7 @@ const MoveModal = ({ isOpen, onClose, onMove, allFiles, movingFile }) => {
   );
 };
 
-const MainContent = ({ parentFolderId, onFolderClick, refreshTrigger, folderStack, currentFolderId, currentFolderName, onNavigateToFolder, showStarred = false, viewMode: currentView = 'my-drive', searchQuery }) => {
+const MainContent = ({ parentFolderId, onFolderClick, refreshTrigger, folderStack, currentFolderId, currentFolderName, onNavigateToFolder, showStarred = false, viewMode: currentView = 'my-drive', searchQuery, showSearchBar = true }) => {
   const [viewMode, setViewMode] = useState(() => {
     const savedViewMode = localStorage.getItem('drive-view-mode');
     return savedViewMode || 'grid';

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-const Header = ({ setSearchQuery, onLogoClick }) => {
+const Header = ({ setSearchQuery, onLogoClick, viewMode }) => {
   const [userInitial, setUserInitial] = useState('A');
 
   useEffect(() => {
@@ -32,7 +32,8 @@ const Header = ({ setSearchQuery, onLogoClick }) => {
       </div>
 
       {/* Search Bar */}
-      {/* <div className="flex-1 max-w-3xl mx-4">
+      
+      { viewMode !== "home" && <div className="flex-1 max-w-3xl mx-4">
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
             <svg className="w-5 h-5 text-gray-500" viewBox="0 0 24 24" fill="none">
@@ -53,7 +54,7 @@ const Header = ({ setSearchQuery, onLogoClick }) => {
             </button>
           </div>
         </div>
-      </div> */}
+      </div>}
 
       {/* Right Side Icons */}
       <div className="flex items-center gap-1">

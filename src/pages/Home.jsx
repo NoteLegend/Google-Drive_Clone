@@ -114,6 +114,7 @@ function Home() {
       <Header 
         setSearchQuery={setSearchQuery} 
         onLogoClick={handleLogoClick}
+        viewMode={viewMode}
       />
 
       <div className="flex flex-1 overflow-hidden">
