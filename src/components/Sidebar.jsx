@@ -182,7 +182,7 @@ const Sidebar = ({ currentFolderId, onFileUpload, onFolderCreate, viewMode, onVi
       case 'spam':
         return (
           <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15h-2v-2h2v2zm0-4h-2V7h2v6zm4-4h-2V7h2v6zm0 4h-2v-2h2v2z"/>
+            <path d="M15.73,3H8.27L3,8.27v7.46L8.27,21h7.46L21,15.73V8.27L15.73,3z M12,17c-0.55,0-1-0.45-1-1s0.45-1,1-1s1,0.45,1,1 S12.55,17,12,17z M13,13h-2V7h2V13z" />
           </svg>
         );
       // --- END NEW SPAM ICON ---

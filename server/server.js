@@ -155,6 +155,16 @@ app.get('/api/files', (req, res) => {
       // Show only files that are shared and not deleted
       files = allFiles.filter(file => isShared(file) && !isDeleted(file));
       console.log(`Shared filter: Found ${files.length} shared files out of ${allFiles.length} total files`);
+    } else if (viewMode === 'storage') {
+      // Show all non-deleted files, sorted by size descending
+      files = allFiles.filter(file => !isDeleted(file));
+      files = files.sort((a, b) => (b.size || 0) - (a.size || 0));
+      console.log(`Storage filter: Found ${files.length} files sorted by size`);
+    } else if (viewMode === 'home') {
+      // Show all non-deleted files, sorted by modified_at descending
+      files = allFiles.filter(file => !isDeleted(file));
+      files = files.sort((a, b) => new Date(b.modified_at) - new Date(a.modified_at));
+      console.log(`Home filter: Found ${files.length} files sorted by date`);
     } else if (viewMode === 'recent') {
       // Show all files, sorted by modified date (most recent first)
       // Filter out deleted files (undefined deleted means not deleted)
@@ -215,7 +225,8 @@ app.get('/api/files', (req, res) => {
       owner: file.owner || 'me',
       starred: file.starred === 1 || file.starred === true,
       path: file.path,
-      parentFolderId: file.parent_folder_id
+      parentFolderId: file.parent_folder_id,
+      deleted: isDeleted(file)
     }));
 
     res.json(formattedFiles);
@@ -492,32 +503,303 @@ app.put('/api/files/:id/star', (req, res) => {
 // GET /api/storage - Get storage usage information
 app.get('/api/storage', (req, res) => {
   try {
-    // Read database directly to get all files recursively
-    const data = JSON.parse(fs.readFileSync(join(__dirname, '..', 'database.json'), 'utf8'));
-    const allFiles = data.files || [];
-    
-    // Filter out folders (they don't take storage space)
-    const filesOnly = allFiles.filter(file => file.type !== 'folder');
-    
-    // Calculate total size in bytes
-    const totalBytes = filesOnly.reduce((sum, file) => sum + (file.size || 0), 0);
-    
-    // Total storage limit (15 GB in bytes)
+    // Hardcoded values as per requirements
     const totalStorageBytes = 15 * 1024 * 1024 * 1024; // 15 GB
-    
-    // Calculate percentage
+    const totalBytes = 6.2 * 1024 * 1024 * 1024; // 6.2 GB
     const percentage = (totalBytes / totalStorageBytes) * 100;
     
     res.json({
       used: totalBytes,
       total: totalStorageBytes,
-      usedFormatted: formatFileSize(totalBytes),
+      usedFormatted: '6.2 GB',
       totalFormatted: '15 GB',
       percentage: Math.min(percentage, 100) // Cap at 100%
     });
   } catch (error) {
     console.error('Error calculating storage:', error);
     res.status(500).json({ error: 'Failed to calculate storage' });
+  }
+});
+
+// PUT /api/files/:id/rename - Rename a file or folder
+app.put('/api/files/:id/rename', (req, res) => {
+  try {
+    const fileId = parseInt(req.params.id);
+    const { newName } = req.body;
+
+    if (!newName || newName.trim() === '') {
+      return res.status(400).json({ error: 'New name is required' });
+    }
+
+    const file = db.get(fileId);
+    if (!file) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+
+    const trimmedName = newName.trim();
+
+    // Check for conflicts
+    if (db.exists(trimmedName, file.parent_folder_id, file.id)) {
+      return res.status(400).json({ error: 'An item with this name already exists' });
+    }
+
+    // Calculate old and new paths
+    const oldPath = file.path;
+    const oldFsPath = join(__dirname, '..', 'public', oldPath);
+    
+    // Extract directory from old path and append new name
+    const pathParts = oldPath.split('/');
+    pathParts[pathParts.length - 1] = trimmedName;
+    const newPath = pathParts.join('/');
+    const newFsPath = join(__dirname, '..', 'public', newPath);
+
+    // Rename on filesystem
+    if (fs.existsSync(oldFsPath)) {
+      fs.renameSync(oldFsPath, newFsPath);
+      console.log(`Renamed fs object from ${oldFsPath} to ${newFsPath}`);
+    } else {
+      console.warn(`File not found at ${oldFsPath}, updating DB only.`);
+    }
+
+    // Update database
+    db.update(fileId, { name: trimmedName, path: newPath });
+
+    // If it's a folder, recursively update all children's paths
+    if (file.type === 'folder') {
+      const data = db.readDB();
+      
+      const updateChildPaths = (parentId, parentPath) => {
+        data.files.forEach(f => {
+          if (f.parent_folder_id === parentId) {
+            const childNewPath = join(parentPath, f.name).replace(/\\/g, '/');
+            f.path = childNewPath;
+            if (f.type === 'folder') {
+              updateChildPaths(f.id, childNewPath);
+            }
+          }
+        });
+      };
+      
+      updateChildPaths(fileId, newPath);
+      db.writeDB(data);
+    }
+
+    res.json({ message: 'File renamed successfully', newPath: newPath });
+  } catch (error) {
+    console.error('Error renaming file:', error);
+    res.status(500).json({ error: 'Failed to rename file: ' + error.message });
+  }
+});
+
+// Helper function to get unique copy name
+function getUniqueCopyName(name, parentId) {
+  let copyName = `Copy of ${name}`;
+  let counter = 1;
+  
+  while (db.exists(copyName, parentId)) {
+    const extMatch = name.match(/\.[^.]+$/);
+    if (extMatch) {
+      const ext = extMatch[0];
+      const nameWithoutExt = name.substring(0, name.lastIndexOf(ext));
+      copyName = `Copy of ${nameWithoutExt} (${counter})${ext}`;
+    } else {
+      copyName = `Copy of ${name} (${counter})`;
+    }
+    counter++;
+  }
+  
+  return copyName;
+}
+
+// Helper function to recursively copy a folder
+function copyFolderRecursive(oldFsPath, newFsPath, oldDbFolder, newDbFolder, data) {
+  // Create the new folder on filesystem
+  if (!fs.existsSync(newFsPath)) {
+    fs.mkdirSync(newFsPath, { recursive: true });
+  }
+
+  // Find all children of the old folder
+  const children = data.files.filter(f => f.parent_folder_id === oldDbFolder.id);
+  
+  // Copy each child
+  children.forEach(child => {
+    const childOldFsPath = join(__dirname, '..', 'public', child.path);
+    const childNewPath = `${newDbFolder.path}/${child.name}`;
+    const childNewFsPath = join(__dirname, '..', 'public', childNewPath);
+
+    if (child.type === 'folder') {
+      // Recursively copy folder
+      const childNewDbFolder = {
+        ...child,
+        id: data.nextId++,
+        name: child.name,
+        path: childNewPath,
+        parent_folder_id: newDbFolder.id,
+        starred: 0
+      };
+      data.files.push(childNewDbFolder);
+      copyFolderRecursive(childOldFsPath, childNewFsPath, child, childNewDbFolder, data);
+    } else {
+      // Copy file
+      if (fs.existsSync(childOldFsPath)) {
+        fs.copyFileSync(childOldFsPath, childNewFsPath);
+      }
+      
+      // Insert new file record
+      data.files.push({
+        ...child,
+        id: data.nextId++,
+        name: child.name,
+        path: childNewPath,
+        parent_folder_id: newDbFolder.id,
+        starred: 0
+      });
+    }
+  });
+}
+
+// POST /api/files/:id/copy - Make a copy of a file or folder
+app.post('/api/files/:id/copy', (req, res) => {
+  try {
+    const fileId = parseInt(req.params.id);
+    const file = db.get(fileId);
+
+    if (!file) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+
+    // Get unique copy name
+    const newName = getUniqueCopyName(file.name, file.parent_folder_id);
+    
+    // Calculate new path
+    let newPath;
+    if (file.parent_folder_id === null) {
+      newPath = `uploads/${newName}`;
+    } else {
+      const parentFolder = db.get(file.parent_folder_id);
+      newPath = `${parentFolder.path}/${newName}`;
+    }
+    const newFsPath = join(__dirname, '..', 'public', newPath);
+
+    // Insert new record
+    const result = db.insert({
+      name: newName,
+      type: file.type,
+      size: file.size || 0,
+      path: newPath,
+      parent_folder_id: file.parent_folder_id,
+      starred: 0,
+      deleted: 0,
+      shared: 0,
+      owner: file.owner || 'me'
+    });
+
+    const newDbFile = db.get(result.lastInsertRowid);
+
+    // Copy on filesystem
+    const oldFsPath = join(__dirname, '..', 'public', file.path);
+
+    if (file.type === 'folder') {
+      // Recursive folder copy
+      const data = db.readDB();
+      copyFolderRecursive(oldFsPath, newFsPath, file, newDbFile, data);
+      db.writeDB(data);
+    } else {
+      // File copy
+      if (fs.existsSync(oldFsPath)) {
+        fs.copyFileSync(oldFsPath, newFsPath);
+      }
+    }
+
+    res.json({ message: 'File copied successfully', newFile: newDbFile });
+  } catch (error) {
+    console.error('Error copying file:', error);
+    res.status(500).json({ error: 'Failed to copy file: ' + error.message });
+  }
+});
+
+// PUT /api/files/:id/restore - Restore a file or folder from trash
+app.put('/api/files/:id/restore', (req, res) => {
+  try {
+    const fileId = parseInt(req.params.id);
+    const file = db.get(fileId);
+
+    if (!file) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+
+    // Restore the file
+    db.update(fileId, { deleted: 0 });
+
+    // Restore parent chain
+    let currentParentId = file.parent_folder_id;
+    while (currentParentId !== null) {
+      const parent = db.get(currentParentId);
+      if (parent && (parent.deleted === 1 || parent.deleted === true)) {
+        db.update(currentParentId, { deleted: 0 });
+        currentParentId = parent.parent_folder_id;
+      } else {
+        break;
+      }
+    }
+
+    // If it's a folder, recursively restore all children
+    if (file.type === 'folder') {
+      const data = db.readDB();
+      
+      const restoreChildren = (parentId) => {
+        data.files.forEach(f => {
+          if (f.parent_folder_id === parentId) {
+            if (f.deleted === 1 || f.deleted === true) {
+              f.deleted = 0;
+            }
+            if (f.type === 'folder') {
+              restoreChildren(f.id);
+            }
+          }
+        });
+      };
+      
+      restoreChildren(fileId);
+      db.writeDB(data);
+    }
+
+    res.json({ message: 'File restored successfully' });
+  } catch (error) {
+    console.error('Error restoring file:', error);
+    res.status(500).json({ error: 'Failed to restore file: ' + error.message });
+  }
+});
+
+// DELETE /api/files/:id/permanent - Permanently delete a file or folder
+app.delete('/api/files/:id/permanent', (req, res) => {
+  try {
+    const fileId = parseInt(req.params.id);
+    const file = db.get(fileId);
+
+    if (!file) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+
+    const filePath = join(__dirname, '..', 'public', file.path);
+
+    // Delete from filesystem
+    if (fs.existsSync(filePath)) {
+      if (file.type === 'folder') {
+        fs.rmSync(filePath, { recursive: true, force: true });
+      } else {
+        fs.unlinkSync(filePath);
+      }
+      console.log(`Deleted ${file.type} from filesystem: ${filePath}`);
+    }
+
+    // Delete from database (this is already recursive)
+    db.delete(fileId);
+
+    res.json({ message: 'File permanently deleted' });
+  } catch (error) {
+    console.error('Error permanently deleting file:', error);
+    res.status(500).json({ error: 'Failed to permanently delete file: ' + error.message });
   }
 });
 

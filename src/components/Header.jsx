@@ -1,15 +1,105 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
-const Header = ({ setSearchQuery, onLogoClick, viewMode }) => {
+const Header = ({ setSearchQuery, onSearchSubmit, onLogoClick, viewMode }) => {
   const [userInitial, setUserInitial] = useState('A');
+  const [userName, setUserName] = useState('User');
+  const [userEmail, setUserEmail] = useState('user@example.com');
+  const [showAppsPopup, setShowAppsPopup] = useState(false);
+  const [showProfilePopup, setShowProfilePopup] = useState(false);
+  const appsPopupRef = useRef(null);
+  const profilePopupRef = useRef(null);
 
   useEffect(() => {
     const userData = localStorage.getItem('drive-user');
     if (userData) {
       const user = JSON.parse(userData);
       setUserInitial(user.initial || 'A');
+      setUserName(user.name || 'User');
+      setUserEmail(user.email || 'user@example.com');
     }
   }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (appsPopupRef.current && !appsPopupRef.current.contains(event.target)) {
+        setShowAppsPopup(false);
+      }
+      if (profilePopupRef.current && !profilePopupRef.current.contains(event.target)) {
+        setShowProfilePopup(false);
+      }
+    };
+
+    if (showAppsPopup || showProfilePopup) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showAppsPopup, showProfilePopup]);
+
+  const AppsPopup = () => (
+    showAppsPopup && (
+      <div
+        ref={appsPopupRef}
+        className="absolute top-16 right-4 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50 p-4"
+      >
+        <div className="grid grid-cols-3 gap-4">
+          {[
+            { name: 'Gmail', icon: 'https://ssl.gstatic.com/images/branding/product/1x/gmail_48dp.png' },
+            { name: 'Drive', icon: 'https://ssl.gstatic.com/images/branding/product/1x/drive_48dp.png' },
+            { name: 'Calendar', icon: 'https://ssl.gstatic.com/images/branding/product/1x/calendar_48dp.png' },
+            { name: 'Photos', icon: 'https://ssl.gstatic.com/images/branding/product/1x/photos_48dp.png' },
+            { name: 'Maps', icon: 'https://ssl.gstatic.com/images/branding/product/1x/maps_48dp.png' },
+            { name: 'YouTube', icon: 'https://ssl.gstatic.com/images/branding/product/1x/youtube_48dp.png' },
+            { name: 'Translate', icon: 'https://ssl.gstatic.com/images/branding/product/1x/translate_48dp.png' },
+            { name: 'News', icon: 'https://ssl.gstatic.com/images/branding/product/1x/news_48dp.png' },
+            { name: 'Meet', icon: 'https://ssl.gstatic.com/images/branding/product/1x/meet_48dp.png' },
+            { name: 'Chat', icon: 'https://ssl.gstatic.com/images/branding/product/1x/chat_48dp.png' },
+            { name: 'Contacts', icon: 'https://ssl.gstatic.com/images/branding/product/1x/contacts_48dp.png' },
+            { name: 'Keep', icon: 'https://ssl.gstatic.com/images/branding/product/1x/keep_48dp.png' },
+          ].map((app, index) => (
+            <div key={index} className="flex flex-col items-center p-2 hover:bg-gray-100 rounded-lg cursor-pointer">
+              <img src={app.icon} alt={app.name} className="w-12 h-12" />
+              <span className="text-xs text-gray-700 mt-1">{app.name}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  );
+
+  const ProfilePopup = () => (
+    showProfilePopup && (
+      <div
+        ref={profilePopupRef}
+        className="absolute top-16 right-4 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50"
+      >
+        <div className="p-4 border-b border-gray-200">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-purple-600 text-white flex items-center justify-center font-medium">
+              {userInitial}
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-900">{userName}</p>
+              <p className="text-xs text-gray-500">{userEmail}</p>
+            </div>
+          </div>
+        </div>
+        <div className="p-2">
+          <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded">
+            Manage your Google Account
+          </button>
+          <button
+            onClick={() => window.location.href = '/'}
+            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded"
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
+    )
+  );
 
   return (
     <header className="h-16 border-b border-gray-200 flex items-center justify-between px-4 bg-white">
@@ -45,6 +135,7 @@ const Header = ({ setSearchQuery, onLogoClick, viewMode }) => {
             placeholder="Search in Drive"
             className="w-full pl-12 pr-4 py-3 bg-gray-100 hover:bg-gray-200 focus:bg-white focus:shadow-md rounded-2xl outline-none transition-all"
             onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && onSearchSubmit && onSearchSubmit(e.target.value)}
           />
           <div className="absolute inset-y-0 right-0 pr-2 flex items-center">
             <button className="p-2 hover:bg-gray-300 rounded-full">
@@ -56,8 +147,15 @@ const Header = ({ setSearchQuery, onLogoClick, viewMode }) => {
         </div>
       </div>}
 
+      {/* Try Gemini Button */}
+      {viewMode !== "home" && (
+        <button className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-full hover:bg-gray-50 transition-colors">
+          Try Gemini
+        </button>
+      )}
+
       {/* Right Side Icons */}
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 relative">
         <button className="p-2 hover:bg-gray-100 rounded-full" title="Help">
           <svg className="w-6 h-6 text-gray-600" viewBox="0 0 24 24" fill="none">
             <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
@@ -70,13 +168,22 @@ const Header = ({ setSearchQuery, onLogoClick, viewMode }) => {
             <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" stroke="currentColor" strokeWidth="2" />
           </svg>
         </button>
-        <button className="p-2 hover:bg-gray-100 rounded-full" title="Google Apps">
+        <button
+          className="p-2 hover:bg-gray-100 rounded-full relative"
+          title="Google Apps"
+          onClick={() => setShowAppsPopup(!showAppsPopup)}
+        >
           <svg className="w-6 h-6 text-gray-600" viewBox="0 0 24 24" fill="currentColor">
             <path d="M6 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm6-8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm6-8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
           </svg>
+          <AppsPopup />
         </button>
-        <button className="ml-2 w-8 h-8 rounded-full bg-purple-600 text-white flex items-center justify-center font-medium hover:bg-purple-700">
+        <button
+          className="ml-2 w-8 h-8 rounded-full bg-purple-600 text-white flex items-center justify-center font-medium hover:bg-purple-700 relative"
+          onClick={() => setShowProfilePopup(!showProfilePopup)}
+        >
           {userInitial}
+          <ProfilePopup />
         </button>
       </div>
     </header>

@@ -31,7 +31,7 @@ const MoveModal = ({ isOpen, onClose, onMove, allFiles, movingFile }) => {
   );
 };
 
-const MainContent = ({ parentFolderId, onFolderClick, refreshTrigger, folderStack, currentFolderId, currentFolderName, onNavigateToFolder, showStarred = false, viewMode: currentView = 'my-drive', searchQuery, showSearchBar = true }) => {
+const MainContent = ({ parentFolderId, onFolderClick, refreshTrigger, folderStack, currentFolderId, currentFolderName, onNavigateToFolder, showStarred = false, viewMode: currentView = 'my-drive', searchQuery, showSearchBar = true, onSearchSubmit }) => {
   const [viewMode, setViewMode] = useState(() => {
     const savedViewMode = localStorage.getItem('drive-view-mode');
     return savedViewMode || 'grid';
@@ -204,7 +204,7 @@ const MainContent = ({ parentFolderId, onFolderClick, refreshTrigger, folderStac
     }
   };
 
-  const suggestedFiles = files.filter(file => file.type !== 'folder').slice(0, 2).map(file => ({
+  const suggestedFiles = files.slice(0, 4).map(file => ({
     id: file.id,
     name: file.name,
     type: file.type,
@@ -365,21 +365,25 @@ const MainContent = ({ parentFolderId, onFolderClick, refreshTrigger, folderStac
                       <th className="text-left px-4 py-3 text-xs font-medium text-gray-600">Type</th>
                       <th className="text-left px-4 py-3 text-xs font-medium text-gray-600">Last modified</th>
                       <th className="text-left px-4 py-3 text-xs font-medium text-gray-600">File size</th>
+                      <th className="w-12 px-4 py-3"></th>
                     </tr>
                   </thead>
                   <tbody>
                     {filesOnly.map((file) => (
-                      <tr key={file.id} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-3">
-                            <div className="w-6 h-6 flex-shrink-0">{getFileIcon(file.type)}</div>
-                            <span className="text-sm text-gray-900">{file.name}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-600 capitalize">{file.type}</td>
-                        <td className="px-4 py-3 text-sm text-gray-600">{file.modified}</td>
-                        <td className="px-4 py-3 text-sm text-gray-600">{file.size}</td>
-                      </tr>
+                      <FileItem
+                        key={file.id}
+                        file={file}
+                        viewMode="list"
+                        viewModeContext={currentView}
+                        isSelected={selectedFiles.includes(file.id)}
+                        onToggleSelect={toggleFileSelection}
+                        onClick={() => handleFileClick(file)}
+                        onDelete={handleDelete}
+                        onToggleStar={handleToggleStar}
+                        onMove={handleMove}
+                        onMoveFile={handleConfirmMove}
+                        onRefresh={loadFiles}
+                      />
                     ))}
                   </tbody>
                 </table>
@@ -415,7 +419,8 @@ const MainContent = ({ parentFolderId, onFolderClick, refreshTrigger, folderStac
                 type="text"
                 placeholder="Search in Drive"
                 className="w-full pl-12 pr-4 py-3 bg-gray-100 hover:bg-gray-200 focus:bg-white focus:shadow-md rounded-2xl outline-none transition-all"
-                onChange={(e) => {}}
+                onChange={(e) => onSearchSubmit && onSearchSubmit(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && onSearchSubmit && onSearchSubmit(e.target.value)}
               />
             </div>
           </div>
@@ -555,6 +560,7 @@ const MainContent = ({ parentFolderId, onFolderClick, refreshTrigger, folderStac
                         key={file.id}
                         file={file}
                         viewMode="list"
+                        viewModeContext={currentView}
                         isSelected={selectedFiles.includes(file.id)}
                         onToggleSelect={toggleFileSelection}
                         onClick={() => handleFileClick(file)}
@@ -562,6 +568,7 @@ const MainContent = ({ parentFolderId, onFolderClick, refreshTrigger, folderStac
                         onToggleStar={handleToggleStar}
                         onMove={handleMove}
                         onMoveFile={handleConfirmMove}
+                        onRefresh={loadFiles}
                       />
                     ))
                   )}
@@ -574,19 +581,21 @@ const MainContent = ({ parentFolderId, onFolderClick, refreshTrigger, folderStac
                 <div className="col-span-full">{renderEmptyState()}</div>
               ) : (
                 files.map((file) => (
-                  <FileItem
-                    key={file.id}
-                    file={file}
-                    viewMode="grid"
-                    isSelected={selectedFiles.includes(file.id)}
-                    onToggleSelect={toggleFileSelection}
-                    onClick={() => handleFileClick(file)}
-                    onDelete={handleDelete}
-                    onToggleStar={handleToggleStar}
-                    onMove={handleMove}
-                    onMoveFile={handleConfirmMove}
-                  />
-                ))
+                      <FileItem
+                        key={file.id}
+                        file={file}
+                        viewMode="grid"
+                        viewModeContext={currentView}
+                        isSelected={selectedFiles.includes(file.id)}
+                        onToggleSelect={toggleFileSelection}
+                        onClick={() => handleFileClick(file)}
+                        onDelete={handleDelete}
+                        onToggleStar={handleToggleStar}
+                        onMove={handleMove}
+                        onMoveFile={handleConfirmMove}
+                        onRefresh={loadFiles}
+                      />
+                    ))
               )}
             </div>
           )}

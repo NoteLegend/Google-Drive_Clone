@@ -14,7 +14,8 @@ export const fetchFiles = async (parentFolderId = null, starred = false, viewMod
   } else if (starred) {
     // If starred is true, don't send parentFolderId
     params.append('starred', 'true');
-  } else if (parentFolderId !== null) {
+  } else if (parentFolderId !== null && !['storage', 'recent', 'home', 'starred'].includes(viewMode)) {
+    // Do not send parentFolderId if viewMode is 'storage', 'recent', 'home', or 'starred'
     params.append('parentFolderId', parentFolderId);
   }
   // --- END CHANGES ---
@@ -128,6 +129,62 @@ export const getStorageInfo = async () => {
     throw new Error(error.error || 'Failed to fetch storage info');
   }
   
+  return response.json();
+};
+
+export const renameFile = async (fileId, newName) => {
+  const response = await fetch(`${API_BASE}/files/${fileId}/rename`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ newName }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to rename file');
+  }
+
+  return response.json();
+};
+
+export const copyFile = async (fileId) => {
+  const response = await fetch(`${API_BASE}/files/${fileId}/copy`, {
+    method: 'POST',
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to copy file');
+  }
+
+  return response.json();
+};
+
+export const restoreFile = async (fileId) => {
+  const response = await fetch(`${API_BASE}/files/${fileId}/restore`, {
+    method: 'PUT',
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to restore file');
+  }
+
+  return response.json();
+};
+
+export const deleteFileForever = async (fileId) => {
+  const response = await fetch(`${API_BASE}/files/${fileId}/permanent`, {
+    method: 'DELETE',
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to permanently delete file');
+  }
+
   return response.json();
 };
 
